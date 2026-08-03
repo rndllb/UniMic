@@ -11,6 +11,19 @@ phone browser ──wss──> anymic.py ──> pw-cat ──> PipeWire virtual
  getUserMedia          jitter buffer         "AnyMic (Phone)"
 ```
 
+## What it looks like
+
+Start it on the PC — it creates the virtual mic and prints the URL to open:
+
+![AnyMic starting up and a phone connecting](docs/server.png)
+
+Open that URL on the phone, tap **Start microphone**, and it streams:
+
+<img src="docs/phone.png" alt="AnyMic running in mobile Safari, showing the level meter, mic volume slider and live stats" width="330">
+
+The stats are live: buffer depth, bytes sent, dropout count and link state, so
+you can tell at a glance whether audio is actually flowing rather than guessing.
+
 ## Why not Wo Mic
 
 Wo Mic needs a phone app talking a proprietary protocol to an unmaintained Linux
