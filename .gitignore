@@ -1,0 +1,5 @@
+# Generated at runtime — contains a TLS private key. Never commit.
+certs/
+
+__pycache__/
+*.pyc

@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111113">
+<title>AnyMic</title>
+<style>
+  /* Palette lifted from EZ RENDER / EZ VETRO so this sits in the same family.
+     Both apps are dark-only, so this is too. */
+  :root {
+    --brand-dark: #0f0f0f;
+    --brand-accent: #7c93ed;
+    --brand-white: #e8e8e8;
+    --text: #d4d4d4;
+    --muted: rgba(255,255,255,.5);
+    --line: rgba(255,255,255,.1);
+    --line-soft: rgba(255,255,255,.06);
+    --card-bg: #1c1c1e;
+    --input-bg: #2c2c2e;
+    --header-bg: #111113;
+    --err: #ef6461;
+    --ok: #4ade80;
+    --warn: #f4b942;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-top: env(safe-area-inset-top, 0px);
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--brand-dark); }
+  body {
+    margin: 0; color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+          system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    background: var(--header-bg);
+    border-bottom: 1px solid var(--line);
+    padding: calc(var(--safe-top) + 14px) 16px 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    position: sticky; top: 0; z-index: 10;
+  }
+  .brand {
+    font-size: 18.4px; font-weight: 800; letter-spacing: .03em;
+    color: var(--brand-white); margin: 0;
+  }
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12px; color: var(--muted);
+    background: rgba(255,255,255,.04); border: 1px solid var(--line-soft);
+    padding: 4px 10px; border-radius: 999px; white-space: nowrap;
+  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot.on  { background: var(--ok);  box-shadow: 0 0 0 3px rgba(74,222,128,.15); }
+  .dot.err { background: var(--err); box-shadow: 0 0 0 3px rgba(239,100,97,.15); }
+
+  main { padding: 16px 16px calc(var(--safe-bottom) + 24px); max-width: 520px; margin: 0 auto; }
+  .lede { color: var(--muted); font-size: 13px; margin: 0 0 16px; }
+
+  .card {
+    background: var(--card-bg); border: 1px solid var(--line-soft);
+    border-radius: 10px; padding: 16px; margin-bottom: 12px;
+  }
+  .card h2 {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 12px;
+  }
+
+  #start {
+    width: 100%; padding: 15px; font-size: 15px; font-weight: 600;
+    font-family: inherit; border: 0; border-radius: 6px;
+    background: rgba(124,147,237,.18); color: var(--brand-white);
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+    transition: background .12s ease;
+  }
+  #start:active { background: rgba(124,147,237,.28); }
+  #start[disabled] { opacity: .5; }
+  #start.stop { background: rgba(239,100,97,.18); color: #f6c3c2; }
+  #start.stop:active { background: rgba(239,100,97,.28); }
+
+  .rowlabel {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--muted); margin: 18px 0 7px;
+  }
+  .rowlabel .val { color: var(--brand-white); font-variant-numeric: tabular-nums;
+                   letter-spacing: normal; text-transform: none; font-size: 12px; }
+  .clip { color: var(--warn); font-weight: 700; opacity: 0; transition: opacity .15s ease; }
+  .clip.on { opacity: 1; }
+
+  .meter { height: 8px; background: var(--input-bg); border-radius: 999px; overflow: hidden; }
+  .meter > i {
+    display: block; height: 100%; width: 0%; border-radius: 999px;
+    background: var(--brand-accent); transition: width .06s linear;
+  }
+  .meter.clipping > i { background: var(--warn); }
+
+  /* Volume slider, styled to the same accent language as the buttons. */
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 22px; margin: 0; background: transparent; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 8px; border-radius: 999px; background: var(--input-bg);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; margin-top: -5px;
+    width: 18px; height: 18px; border-radius: 50%; border: 0;
+    background: var(--brand-accent);
+  }
+  input[type=range]::-moz-range-track {
+    height: 8px; border-radius: 999px; background: var(--input-bg);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 18px; height: 18px; border-radius: 50%; border: 0;
+    background: var(--brand-accent);
+  }
+  .ticks {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: var(--muted); margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 16px;
+          background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 10px;
+          overflow: hidden; }
+  .stat { background: var(--card-bg); padding: 11px 13px; font-size: 11px; color: var(--muted);
+          letter-spacing: .04em; text-transform: uppercase; }
+  .stat b {
+    display: block; font-size: 17px; font-weight: 600; color: var(--brand-white);
+    letter-spacing: normal; text-transform: none; font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+  }
+
+  label.row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 14px; padding: 11px 0; font-size: 14px; color: var(--text);
+  }
+  label.row + label.row { border-top: 1px solid var(--line-soft); }
+  label.row small { display: block; color: var(--muted); font-size: 12px; margin-top: 1px; }
+  input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--brand-accent); flex: none; }
+
+  .hint { font-size: 12px; color: var(--muted); margin-top: 12px; }
+  .err {
+    display: none; margin-top: 12px; padding: 10px 12px; border-radius: 6px;
+    background: rgba(239,100,97,.1); border: 1px solid rgba(239,100,97,.25);
+    color: var(--err); font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 class="brand">AnyMic</h1>
+  <div class="pill"><span class="dot" id="dot"></span><span id="state">Idle</span></div>
+</header>
+
+<main>
+  <p class="lede">This phone becomes a microphone on your PC.</p>
+
+  <div class="card">
+    <button id="start">Start microphone</button>
+
+    <div class="rowlabel">
+      <span>Input level <span class="clip" id="clip">CLIP</span></span>
+      <span class="val" id="s-rate">–</span>
+    </div>
+    <div class="meter" id="meterwrap"><i id="meter"></i></div>
+
+    <div class="rowlabel">
+      <span>Mic volume</span>
+      <span class="val" id="volval">100%</span>
+    </div>
+    <input type="range" id="vol" min="0" max="300" step="5" value="100"
+           aria-label="Microphone volume">
+    <div class="ticks"><span>0%</span><span>100%</span><span>300%</span></div>
+
+    <div class="err" id="err"></div>
+
+    <div class="grid">
+      <div class="stat">Buffer<b id="s-buf">–</b></div>
+      <div class="stat">Sent<b id="s-sent">–</b></div>
+      <div class="stat">Dropouts<b id="s-under">–</b></div>
+      <div class="stat">Link<b id="s-link">–</b></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Capture</h2>
+    <label class="row">
+      <div>Noise suppression<small>Reduces steady background hiss</small></div>
+      <input type="checkbox" id="ns" checked>
+    </label>
+    <label class="row">
+      <div>Echo cancellation<small>Turn off if the PC isn't playing your voice back</small></div>
+      <input type="checkbox" id="ec">
+    </label>
+    <label class="row">
+      <div>Auto gain<small>Evens out loud and quiet speech</small></div>
+      <input type="checkbox" id="agc" checked>
+    </label>
+    <label class="row">
+      <div>Keep screen awake<small>Stops the phone sleeping mid-call</small></div>
+      <input type="checkbox" id="wake" checked>
+    </label>
+    <div class="hint">These apply the next time you start. Mic volume applies instantly.</div>
+  </div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let ws, ctx, node, gain, stream, wakeLock;
+let running = false, reconnect = 0, sentBytes = 0, clipTimer = null;
+
+function setState(text, cls) {
+  $('state').textContent = text;
+  $('dot').className = 'dot' + (cls ? ' ' + cls : '');
+}
+function showErr(msg) {
+  const e = $('err');
+  e.textContent = msg;
+  e.style.display = msg ? 'block' : 'none';
+}
+function fmtKB(kb) {
+  return kb > 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' KB';
+}
+
+/* ---- mic volume -------------------------------------------------------
+   Applied as a GainNode ahead of the PCM conversion, so it scales the float
+   samples while they still have headroom. Doing it on the PC side would mean
+   amplifying audio that had already been quantised to 16-bit, raising the
+   noise floor along with the signal. */
+function applyGain(pct, persist) {
+  $('volval').textContent = pct + '%';
+  if (gain && ctx) {
+    // Short ramp — jumping gain.value outright produces an audible click.
+    gain.gain.setTargetAtTime(pct / 100, ctx.currentTime, 0.015);
+  }
+  if (persist) { try { localStorage.setItem('anymic.gain', pct); } catch (_) {} }
+}
+
+(function restoreGain() {
+  let saved = null;
+  try { saved = localStorage.getItem('anymic.gain'); } catch (_) {}
+  if (saved !== null && !isNaN(+saved)) $('vol').value = saved;
+  $('volval').textContent = $('vol').value + '%';
+})();
+
+$('vol').addEventListener('input', e => applyGain(+e.target.value, true));
+
+function flagClip() {
+  $('clip').classList.add('on');
+  $('meterwrap').classList.add('clipping');
+  clearTimeout(clipTimer);
+  clipTimer = setTimeout(() => {
+    $('clip').classList.remove('on');
+    $('meterwrap').classList.remove('clipping');
+  }, 900);
+}
+
+// Batches 128-frame render quanta into ~20ms packets. Sending every quantum
+// would mean ~375 WebSocket frames a second, which is needless overhead on a
+// phone radio; 20ms keeps latency low while cutting that to 50.
+const workletSrc = `
+class PCM extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.buf = new Int16Array(960);   // 20ms @ 48kHz
+    this.n = 0;
+    this.peak = 0;
+    this.clip = false;
+  }
+  process(inputs) {
+    const ch = inputs[0] && inputs[0][0];
+    if (!ch) return true;
+    for (let i = 0; i < ch.length; i++) {
+      let s = ch[i];
+      const a = s < 0 ? -s : s;
+      if (a > this.peak) this.peak = a;
+      if (a >= 1) { this.clip = true; s = s < 0 ? -1 : 1; }
+      this.buf[this.n++] = s < 0 ? s * 0x8000 : s * 0x7fff;
+      if (this.n === this.buf.length) {
+        const out = this.buf.slice();
+        this.port.postMessage({ pcm: out, peak: this.peak, clip: this.clip },
+                              [out.buffer]);
+        this.n = 0;
+        this.peak = 0;
+        this.clip = false;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('pcm', PCM);
+`;
+
+async function start() {
+  showErr('');
+  $('start').disabled = true;
+  try {
+    setState('Requesting mic…');
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        noiseSuppression: $('ns').checked,
+        echoCancellation: $('ec').checked,
+        autoGainControl: $('agc').checked,
+        channelCount: 1,
+      },
+      video: false,
+    });
+
+    // Forcing 48kHz makes the browser resample for us, so the PC always gets
+    // exactly the rate it expects regardless of what the phone's mic runs at.
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    await ctx.resume();
+    $('s-rate').textContent = (ctx.sampleRate / 1000) + ' kHz';
+
+    const blob = new Blob([workletSrc], { type: 'application/javascript' });
+    await ctx.audioWorklet.addModule(URL.createObjectURL(blob));
+
+    node = new AudioWorkletNode(ctx, 'pcm', { numberOfOutputs: 0 });
+    node.port.onmessage = e => {
+      if (ws && ws.readyState === 1) {
+        ws.send(e.data.pcm.buffer);
+        sentBytes += e.data.pcm.byteLength;
+        $('s-sent').textContent = fmtKB(sentBytes >> 10);
+      }
+      $('meter').style.width = Math.min(100, e.data.peak * 100) + '%';
+      if (e.data.clip) flagClip();
+    };
+
+    gain = ctx.createGain();
+    gain.gain.value = (+$('vol').value) / 100;
+    ctx.createMediaStreamSource(stream).connect(gain).connect(node);
+
+    if ($('wake').checked && 'wakeLock' in navigator) {
+      try { wakeLock = await navigator.wakeLock.request('screen'); } catch (_) {}
+    }
+
+    running = true;
+    connect();
+    $('start').textContent = 'Stop microphone';
+    $('start').classList.add('stop');
+  } catch (e) {
+    showErr(e.name === 'NotAllowedError'
+      ? 'Microphone permission denied. Allow it in your browser settings and try again.'
+      : 'Could not start: ' + e.message);
+    setState('Error', 'err');
+    await stop();
+  } finally {
+    $('start').disabled = false;
+  }
+}
+
+function connect() {
+  if (!running) return;
+  setState('Connecting…');
+  ws = new WebSocket(`wss://${location.host}/ws`);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    reconnect = 0;
+    setState('Live', 'on');
+    $('s-link').textContent = 'Up';
+  };
+  ws.onmessage = e => {
+    try {
+      const s = JSON.parse(e.data);
+      $('s-buf').textContent = s.buffer_ms + ' ms';
+      $('s-under').textContent = s.underruns;
+    } catch (_) {}
+  };
+  ws.onclose = () => {
+    $('s-link').textContent = 'Down';
+    if (!running) return;
+    // The PC side may just be restarting; back off and keep trying rather
+    // than making the user tap Start again.
+    const wait = Math.min(5000, 400 * Math.pow(2, reconnect++));
+    setState(`Retry ${(wait / 1000).toFixed(1)}s`, 'err');
+    setTimeout(connect, wait);
+  };
+  ws.onerror = () => {};
+}
+
+async function stop() {
+  running = false;
+  if (ws) { ws.onclose = null; ws.close(); ws = null; }
+  if (node) { node.port.onmessage = null; node.disconnect(); node = null; }
+  if (gain) { gain.disconnect(); gain = null; }
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  if (ctx) { await ctx.close().catch(() => {}); ctx = null; }
+  if (wakeLock) { try { await wakeLock.release(); } catch (_) {} wakeLock = null; }
+  $('meter').style.width = '0%';
+  $('s-link').textContent = '–';
+  $('start').textContent = 'Start microphone';
+  $('start').classList.remove('stop');
+  setState('Idle');
+}
+
+$('start').onclick = () => (running ? stop() : start());
+
+// Screen-off or app-switch suspends the AudioContext on mobile; resume when
+// the user comes back so the stream picks up instead of silently dying.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && ctx && ctx.state === 'suspended') ctx.resume();
+  if (!document.hidden && running && wakeLock === null && $('wake').checked
+      && 'wakeLock' in navigator) {
+    navigator.wakeLock.request('screen').then(l => wakeLock = l).catch(() => {});
+  }
+});
+
+if (!navigator.mediaDevices || !window.AudioWorklet) {
+  showErr('This browser cannot capture audio. Use Chrome, Edge, Firefox or Safari over HTTPS.');
+  $('start').disabled = true;
+}
+</script>
+</body>
+</html>
