@@ -37,6 +37,7 @@ some sharp edges this avoids:
 | Which loopback end? | Client writes device 0, PipeWire reads device 0 — wrong end, silent | N/A |
 | Rate mismatch | No resampling; a mismatch chops audio into robot voice | Browser resamples to 48kHz |
 | Network jitter | Underruns punch holes in the waveform | 120ms jitter buffer, silence-fills |
+| Second device connecting | — | Refused; mic is locked to the first device |
 | iPhone | Not supported | Works |
 
 ## Requirements
@@ -74,6 +75,24 @@ back off until it stops. Clipping cannot be undone further down the chain.
 
 Leave *Auto gain* on if you just want something reasonable without fiddling;
 turn it off when you want the slider to be the only thing setting the level.
+
+### One device at a time
+
+The first device to start streaming owns the microphone. Anyone else on the
+network who opens the URL gets the page but is refused the audio stream, with
+*"Another device is already using the microphone"* rather than a silent failure.
+Without this, a second phone tapping Start would interleave its audio into the
+same buffer and garble both.
+
+The holder is identified by a secret token, not by IP address, so nothing on
+the network can impersonate it.
+
+Losing WiFi does not cost you the microphone. On an unexpected disconnect it is
+**reserved for the original device for 30 seconds** — long enough for its
+automatic reconnect to win, and it is the only device that can reclaim it in
+that window. Pressing **Stop** is treated differently: that frees the mic
+immediately, so handing over to another phone is instant rather than a 30
+second wait.
 
 ### Options
 

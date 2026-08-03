@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import signal
 import socket
@@ -28,6 +29,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -315,6 +317,83 @@ def ws_send(sock, data, opcode=0x1):
     sock.sendall(bytes(header) + data)
 
 
+# Close codes we define ourselves. 4000-4999 is the application-private range,
+# and unlike an HTTP status during the handshake these actually reach the
+# browser, so the page can say *why* it was turned away.
+CLOSE_IN_USE = 4001
+CLOSE_RESERVED = 4002
+
+
+class MicLock:
+    """Grants the microphone to one device at a time, first come first served.
+
+    Anyone can load the page — it is only the audio stream that is exclusive.
+    The holder gets a secret token and is the only one who can reclaim the
+    stream after a drop.
+
+    A brief reservation after an unexpected disconnect is what makes this
+    usable over WiFi: without it, a dropped connection would free the lock and
+    the holder's own automatic reconnect could lose a race to some other device
+    on the network. A deliberate Stop skips the reservation and frees the mic
+    at once, so switching phones stays instant.
+    """
+
+    RESERVE_SECONDS = 30.0
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._token = None        # secret held by the current owner
+        self._connected = False   # is the owner streaming right now?
+        self._freed_at = None     # when an unexpected disconnect happened
+        self.holder = None        # owner's address, for logging
+
+    def _expire(self):
+        """Drop a reservation that has outlived its welcome. Caller holds lock."""
+        if (not self._connected and self._freed_at is not None
+                and time.monotonic() - self._freed_at > self.RESERVE_SECONDS):
+            self._token = None
+            self._freed_at = None
+
+    def claim(self, token, peer):
+        """Try to take the mic. Returns (granted, token, refusal_reason)."""
+        with self._lock:
+            self._expire()
+
+            if self._connected:
+                # Same device reconnecting before we noticed the old socket
+                # died — let it back in rather than locking out the owner.
+                if token and secrets.compare_digest(token, self._token):
+                    self.holder = peer
+                    return True, self._token, None
+                return False, None, "in-use"
+
+            if self._token is not None:
+                # Reserved. Only the previous owner may resume.
+                if token and secrets.compare_digest(token, self._token):
+                    self._connected = True
+                    self._freed_at = None
+                    self.holder = peer
+                    return True, self._token, None
+                return False, None, "reserved"
+
+            self._token = secrets.token_urlsafe(18)
+            self._connected = True
+            self._freed_at = None
+            self.holder = peer
+            return True, self._token, None
+
+    def release(self, token, deliberate):
+        with self._lock:
+            if not self._token or not token or not secrets.compare_digest(token, self._token):
+                return
+            self._connected = False
+            if deliberate:
+                self._token = None
+                self._freed_at = None
+            else:
+                self._freed_at = time.monotonic()
+
+
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "anymic"
@@ -363,19 +442,46 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
 
         mic = self.server.mic
+        lock = self.server.lock
         sock = self.connection
         peer = self.client_address[0]
+
+        offered = parse_qs(urlparse(self.path).query).get("token", [None])[0]
+        granted, token, refusal = lock.claim(offered, peer)
+        if not granted:
+            # Upgrade first, refuse second. An HTTP error during the handshake
+            # is invisible to the browser's WebSocket API, but a close code is
+            # not — so the page can explain itself instead of retry-looping.
+            log(f"refused {peer}: microphone {refusal} by {lock.holder}")
+            try:
+                ws_send(sock, json.dumps({"type": "denied", "reason": refusal}).encode())
+                ws_send(sock, struct.pack(
+                    ">H", CLOSE_IN_USE if refusal == "in-use" else CLOSE_RESERVED),
+                    opcode=0x8)
+            except OSError:
+                pass
+            return
+
         log(f"phone connected from {peer}")
         mic.buffer.reset()
 
         stop = threading.Event()
+        deliberate = False
 
         def stats_loop():
             while not stop.wait(1.0):
                 try:
-                    ws_send(sock, json.dumps(mic.stats()).encode())
+                    payload = mic.stats()
+                    payload["type"] = "stats"
+                    ws_send(sock, json.dumps(payload).encode())
                 except OSError:
                     return
+
+        try:
+            ws_send(sock, json.dumps({"type": "hello", "token": token}).encode())
+        except OSError:
+            lock.release(token, deliberate=False)
+            return
 
         reporter = threading.Thread(target=stats_loop, daemon=True)
         reporter.start()
@@ -389,6 +495,10 @@ class Handler(BaseHTTPRequestHandler):
                 if opcode == 0x2:            # binary — PCM
                     mic.buffer.push(payload)
                 elif opcode == 0x8:          # close
+                    # 1000 means the user pressed Stop. Anything else is a drop,
+                    # and the owner gets a window to come back.
+                    code = struct.unpack(">H", payload[:2])[0] if len(payload) >= 2 else 1005
+                    deliberate = (code == 1000)
                     break
                 elif opcode == 0x9:          # ping
                     ws_send(sock, payload, opcode=0xA)
@@ -397,7 +507,9 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             stop.set()
             mic.buffer.reset()
-            log(f"phone disconnected ({peer})")
+            lock.release(token, deliberate)
+            log(f"phone disconnected ({peer})"
+                + ("" if deliberate else f" — reserved for {int(MicLock.RESERVE_SECONDS)}s"))
 
 
 class Server(ThreadingHTTPServer):
@@ -479,6 +591,7 @@ def main():
         httpd.server_close()
         raise
     httpd.mic = mic
+    httpd.lock = MicLock()
 
     url = f"https://{ip}:{args.port}/"
     print()

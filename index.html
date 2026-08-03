@@ -354,7 +354,12 @@ async function start() {
 function connect() {
   if (!running) return;
   setState('Connecting…');
-  ws = new WebSocket(`wss://${location.host}/ws`);
+  // The token proves we are the device that already holds the mic, so a
+  // dropped connection can be resumed by us and not stolen by someone else.
+  let tok = null;
+  try { tok = localStorage.getItem('anymic.token'); } catch (_) {}
+  ws = new WebSocket(`wss://${location.host}/ws` +
+                     (tok ? '?token=' + encodeURIComponent(tok) : ''));
   ws.binaryType = 'arraybuffer';
 
   ws.onopen = () => {
@@ -363,14 +368,28 @@ function connect() {
     $('s-link').textContent = 'Up';
   };
   ws.onmessage = e => {
-    try {
-      const s = JSON.parse(e.data);
-      $('s-buf').textContent = s.buffer_ms + ' ms';
-      $('s-under').textContent = s.underruns;
-    } catch (_) {}
+    let m;
+    try { m = JSON.parse(e.data); } catch (_) { return; }
+    if (m.type === 'hello') {
+      try { localStorage.setItem('anymic.token', m.token); } catch (_) {}
+    } else if (m.type === 'stats') {
+      $('s-buf').textContent = m.buffer_ms + ' ms';
+      $('s-under').textContent = m.underruns;
+    }
   };
-  ws.onclose = () => {
+  ws.onclose = ev => {
     $('s-link').textContent = 'Down';
+
+    // Turned away by the lock. Retrying would just queue us up to snatch the
+    // mic the instant the other device blinks, so stop and say why.
+    if (ev.code === 4001 || ev.code === 4002) {
+      const msg = ev.code === 4001
+        ? 'Another device is already using the microphone. It stays with whoever connected first.'
+        : 'The microphone is briefly reserved for the device that just disconnected. Try again in a moment.';
+      stop().then(() => { showErr(msg); setState('In use elsewhere', 'err'); });
+      return;
+    }
+
     if (!running) return;
     // The PC side may just be restarting; back off and keep trying rather
     // than making the user tap Start again.
@@ -383,7 +402,9 @@ function connect() {
 
 async function stop() {
   running = false;
-  if (ws) { ws.onclose = null; ws.close(); ws = null; }
+  // 1000 tells the server this was deliberate, so it frees the mic straight
+  // away instead of holding it in reserve for us.
+  if (ws) { ws.onclose = null; ws.close(1000, 'stop'); ws = null; }
   if (node) { node.port.onmessage = null; node.disconnect(); node = null; }
   if (gain) { gain.disconnect(); gain = null; }
   if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
