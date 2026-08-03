@@ -118,65 +118,60 @@ class JitterBuffer:
 
 
 # --------------------------------------------------------------------------
-# PipeWire virtual microphone
+# Virtual microphone backends
 # --------------------------------------------------------------------------
 
 class VirtualMic:
-    """A PipeWire virtual source, fed through pw-cat.
+    """Base class: owns the jitter buffer, the pacing thread and teardown.
 
-    WirePlumber's policy will not route a playback stream onto a node whose
-    media.class is Audio/Source/Virtual, so pw-cat gets auto-connected to the
-    default sink (i.e. the speakers) instead. We therefore start pw-cat with
-    autoconnect disabled and link it into the virtual source by hand.
+    Subclasses supply the two platform-specific pieces — creating a device the
+    system believes is a microphone, and starting a process we can write PCM
+    into that feeds it.
     """
+
+    BACKEND = "?"
 
     def __init__(self, name="AnyMic", description="AnyMic (Phone)"):
         self.name = name
         self.description = description
-        self.feed_node = "anymic-feed"
         self.module_id = None
         self.proc = None
         self.buffer = JitterBuffer()
         self._stop = threading.Event()
         self._feeder = None
 
+    # -- to be provided by the backend -------------------------------------
+    def _create_device(self):
+        raise NotImplementedError
+
+    def _start_feed(self):
+        raise NotImplementedError
+
+    @property
+    def source_name(self):
+        """What users should select as their microphone."""
+        return self.name
+
+    # -- shared ------------------------------------------------------------
     def _run(self, args, **kw):
         return subprocess.run(args, capture_output=True, text=True, **kw)
 
-    def start(self):
-        self._unload_stale()
-
-        r = self._run([
-            "pactl", "load-module", "module-null-sink",
-            "media.class=Audio/Source/Virtual",
-            f"sink_name={self.name}",
-            "channel_map=mono",
-            f'node.description="{self.description}"',
-        ])
-        if r.returncode != 0:
-            raise RuntimeError(f"could not create virtual source: {r.stderr.strip()}")
-        self.module_id = r.stdout.strip()
-        log(f"virtual source '{self.name}' created (module {self.module_id})")
-
-        env = dict(os.environ)
-        env["PIPEWIRE_PROPS"] = (
-            "{ node.autoconnect=false node.name=%s }" % self.feed_node
-        )
-        self.proc = subprocess.Popen(
-            ["pw-cat", "--playback", "--format=s16", f"--rate={RATE}",
-             f"--channels={CHANNELS}", "--raw", "-"],
-            stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
+    def _popen_feed(self, argv, env=None):
+        return subprocess.Popen(
+            argv, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, env=env, bufsize=0,
             # Own session, so a Ctrl-C aimed at our process group doesn't kill
-            # pw-cat out from under the feeder thread. We want to tear it down
-            # in order, after the audio path has been quiesced.
+            # the feed process out from under the feeder thread. We want to
+            # tear it down in order, after the audio path has been quiesced.
             start_new_session=True,
         )
 
-        if not self._link():
-            self.stop()
-            raise RuntimeError("could not link the feed into the virtual source")
-
+    def start(self):
+        self._unload_stale()
+        self._create_device()
+        log(f"virtual source '{self.name}' created "
+            f"(module {self.module_id}, {self.BACKEND} backend)")
+        self._start_feed()
         self._feeder = threading.Thread(target=self._feed_loop, daemon=True)
         self._feeder.start()
         log(f"audio path ready — apps will see it as '{self.description}'")
@@ -190,30 +185,8 @@ class VirtualMic:
                 self._run(["pactl", "unload-module", mid])
                 log(f"removed stale virtual source (module {mid})")
 
-    def _link(self, timeout=5.0):
-        """Wait for pw-cat's port to appear, then wire it up."""
-        src = f"{self.feed_node}:output_MONO"
-        dst = f"{self.name}:input_MONO"
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            if self.proc.poll() is not None:
-                return False
-            ports = self._run(["pw-link", "-o"]).stdout
-            if src in ports:
-                r = self._run(["pw-link", src, dst])
-                if r.returncode == 0 or "exists" in r.stderr.lower():
-                    return True
-            # pw-cat only materialises its ports once it has data to play, so
-            # prime the pipe while we wait for them to show up.
-            try:
-                self.proc.stdin.write(b"\x00" * CHUNK_BYTES)
-            except (BrokenPipeError, ValueError):
-                return False
-            time.sleep(0.05)
-        return False
-
     def _feed_loop(self):
-        """Write to pw-cat at exactly real time, filling gaps with silence."""
+        """Write to the feed process at exactly real time, gaps filled with silence."""
         next_t = time.monotonic()
         while not self._stop.is_set():
             next_t += CHUNK_MS / 1000.0
@@ -258,9 +231,163 @@ class VirtualMic:
             log("virtual source removed")
 
 
+class PipeWireMic(VirtualMic):
+    """A real virtual source, fed through pw-cat.
+
+    WirePlumber's policy will not route a playback stream onto a node whose
+    media.class is Audio/Source/Virtual — it classes the node as a source and
+    silently connects the stream to the default sink instead, so the audio goes
+    to the speakers while the microphone stays dead. pw-cat therefore runs with
+    autoconnect disabled and gets linked into place by hand.
+    """
+
+    BACKEND = "pipewire"
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.feed_node = "anymic-feed"
+
+    def _create_device(self):
+        r = self._run([
+            "pactl", "load-module", "module-null-sink",
+            "media.class=Audio/Source/Virtual",
+            f"sink_name={self.name}",
+            "channel_map=mono",
+            f'node.description="{self.description}"',
+        ])
+        if r.returncode != 0:
+            raise RuntimeError(f"could not create virtual source: {r.stderr.strip()}")
+        self.module_id = r.stdout.strip()
+
+    def _start_feed(self):
+        env = dict(os.environ)
+        env["PIPEWIRE_PROPS"] = (
+            "{ node.autoconnect=false node.name=%s }" % self.feed_node
+        )
+        self.proc = self._popen_feed(
+            ["pw-cat", "--playback", "--format=s16", f"--rate={RATE}",
+             f"--channels={CHANNELS}", "--raw", "-"], env=env)
+        if not self._link():
+            self.stop()
+            raise RuntimeError("could not link the feed into the virtual source")
+
+    def _link(self, timeout=5.0):
+        """Wait for pw-cat's port to appear, then wire it up."""
+        src = f"{self.feed_node}:output_MONO"
+        dst = f"{self.name}:input_MONO"
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                return False
+            ports = self._run(["pw-link", "-o"]).stdout
+            if src in ports:
+                r = self._run(["pw-link", src, dst])
+                if r.returncode == 0 or "exists" in r.stderr.lower():
+                    return True
+            # pw-cat only materialises its ports once it has data to play, so
+            # prime the pipe while we wait for them to show up.
+            try:
+                self.proc.stdin.write(b"\x00" * CHUNK_BYTES)
+            except (BrokenPipeError, ValueError):
+                return False
+            time.sleep(0.05)
+        return False
+
+
+class PulseMic(VirtualMic):
+    """Fallback for systems running PulseAudio rather than PipeWire.
+
+    PulseAudio has no equivalent of Audio/Source/Virtual, so instead we create
+    an ordinary null sink and let apps record from its monitor. It works
+    everywhere, at the cost of appearing as "Monitor of ..." in device lists,
+    which some apps hide behind a "show monitors" toggle.
+    """
+
+    BACKEND = "pulseaudio"
+
+    @property
+    def source_name(self):
+        return f"{self.name}.monitor"
+
+    def _create_device(self):
+        r = self._run([
+            "pactl", "load-module", "module-null-sink",
+            f"sink_name={self.name}",
+            "channel_map=mono",
+            f'sink_properties=device.description="{self.description}"',
+        ])
+        if r.returncode != 0:
+            raise RuntimeError(f"could not create null sink: {r.stderr.strip()}")
+        self.module_id = r.stdout.strip()
+
+    def _start_feed(self):
+        stream = f"{self.name}-feed"
+        self.proc = self._popen_feed([
+            "pacat", "--playback", f"--device={self.name}",
+            "--format=s16le", f"--rate={RATE}", f"--channels={CHANNELS}",
+            f"--client-name={stream}", f"--stream-name={stream}", "--raw",
+        ])
+        # -d is the documented way to pick a sink and is honoured by a real
+        # PulseAudio daemon. Under PipeWire's PulseAudio compatibility layer
+        # it is silently overridden and the stream lands on the default sink
+        # — i.e. the speakers — so move it into place explicitly afterwards.
+        # The move is idempotent, so this is harmless where -d already worked.
+        if not self._attach(stream):
+            self.stop()
+            raise RuntimeError("could not attach the feed to the null sink")
+
+    def _attach(self, stream, timeout=5.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self.proc.poll() is not None:
+                return False
+            for block in self._run(["pactl", "list", "sink-inputs"]).stdout.split("Sink Input #")[1:]:
+                if f'"{stream}"' not in block:
+                    continue
+                index = block.split("\n", 1)[0].strip()
+                self._run(["pactl", "move-sink-input", index, self.name])
+                return True
+            # pacat may not register until it has something to play.
+            try:
+                self.proc.stdin.write(b"\x00" * CHUNK_BYTES)
+            except (BrokenPipeError, ValueError):
+                return False
+            time.sleep(0.1)
+        return False
+
+
+def choose_backend(preference="auto"):
+    """Pick a backend. PipeWire is preferred; PulseAudio is the fallback."""
+    have_pw = shutil.which("pw-cat") and shutil.which("pw-link")
+    have_pa = shutil.which("pacat")
+
+    if preference == "pipewire":
+        if not have_pw:
+            sys.exit("pipewire backend requested but pw-cat/pw-link are missing")
+        return PipeWireMic
+    if preference == "pulse":
+        if not have_pa:
+            sys.exit("pulse backend requested but pacat is missing")
+        return PulseMic
+
+    if have_pw:
+        return PipeWireMic
+    if have_pa:
+        log("pw-cat/pw-link not found — falling back to the PulseAudio backend")
+        return PulseMic
+    sys.exit("no supported audio backend: install PipeWire (pw-cat, pw-link) "
+             "or PulseAudio (pacat)")
+
+
 # --------------------------------------------------------------------------
 # WebSocket
 # --------------------------------------------------------------------------
+
+# Real audio frames are 1920 bytes. Anything remotely near this ceiling is a
+# bug or an attempt to make us allocate on demand, so refuse rather than
+# faithfully buffering whatever length a client claims to be sending.
+MAX_FRAME_BYTES = 1 << 20
+
 
 def ws_recv(sock):
     """Read one WebSocket frame. Returns (opcode, payload) or None on close."""
@@ -290,6 +417,8 @@ def ws_recv(sock):
         if not ext:
             return None
         length = struct.unpack(">Q", ext)[0]
+    if length > MAX_FRAME_BYTES:
+        return None
     mask = exact(4) if masked else None
     payload = exact(length) if length else b""
     if payload is None:
@@ -424,10 +553,33 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _same_origin(self):
+        """Reject WebSocket upgrades initiated by some other website.
+
+        WebSockets are exempt from the same-origin policy, so once a browser
+        has accepted our self-signed certificate, any page it later visits can
+        open a socket to us. It could not hear anything — it would have to send
+        audio, not receive it — but it could seize the lock and shut the owner
+        out of their own microphone.
+
+        Browsers always set Origin on a WebSocket handshake, so checking it
+        closes that off. A missing Origin means a non-browser client (curl, the
+        test suite), which is not the threat here and could forge any value
+        anyway.
+        """
+        origin = self.headers.get("Origin")
+        if not origin:
+            return True
+        return urlparse(origin).netloc == self.headers.get("Host")
+
     def _handle_ws(self):
         key = self.headers.get("Sec-WebSocket-Key")
         if not key:
             self.send_error(400, "not a websocket request")
+            return
+        if not self._same_origin():
+            log(f"refused cross-origin websocket from {self.headers.get('Origin')}")
+            self.send_error(403, "cross-origin websocket refused")
             return
         accept = base64.b64encode(
             hashlib.sha1((key + WS_GUID).encode()).digest()
@@ -559,11 +711,14 @@ def main():
     ap.add_argument("--description", default="AnyMic (Phone)",
                     help="name shown in app microphone lists")
     ap.add_argument("--certdir", default=os.path.join(HERE, "certs"))
+    ap.add_argument("--backend", choices=("auto", "pipewire", "pulse"), default="auto",
+                    help="audio backend (default: prefer PipeWire, fall back to PulseAudio)")
     args = ap.parse_args()
 
-    for tool in ("pactl", "pw-cat", "pw-link", "openssl"):
+    for tool in ("pactl", "openssl"):
         if not shutil.which(tool):
             sys.exit(f"missing required tool: {tool}")
+    backend = choose_backend(args.backend)
 
     ip = lan_ip()
     cert, keyf = ensure_cert(args.certdir, ip)
@@ -584,7 +739,7 @@ def main():
         raise
     httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
 
-    mic = VirtualMic(args.name, args.description)
+    mic = backend(args.name, args.description)
     try:
         mic.start()
     except Exception:
@@ -601,7 +756,12 @@ def main():
     print("  " + "=" * 52)
     print("   The certificate is self-signed, so the browser will warn.")
     print("   Tap Advanced -> Proceed. Then tap Start.")
-    print(f"   Select '{args.description}' as the mic in your apps.")
+    if mic.BACKEND == "pulseaudio":
+        print(f"   Select 'Monitor of {args.description}' as the mic in your apps.")
+        print("   (PulseAudio has no virtual-source type, so it appears as a")
+        print("    monitor. Some apps hide these behind a 'show monitors' option.)")
+    else:
+        print(f"   Select '{args.description}' as the mic in your apps.")
     print("   Ctrl-C to stop.")
     print()
     # Block-buffered whenever stdout isn't a terminal (a log file, systemd's

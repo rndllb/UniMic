@@ -42,8 +42,30 @@ some sharp edges this avoids:
 
 ## Requirements
 
-PipeWire (`pw-cat`, `pw-link`, `pactl`), `openssl`, Python 3.8+. All standard on
-a modern desktop — no pip packages.
+**On the PC:** `pactl`, `openssl`, Python 3.8+, and either PipeWire (`pw-cat`,
+`pw-link`) or PulseAudio (`pacat`). All standard on a modern desktop — no pip
+packages.
+
+**On the phone:** any browser with AudioWorklet support, which in practice
+means **Chrome 66+, Firefox 76+, or Safari 14.1 / iOS 14.5+** — roughly 2021
+onward. Older browsers get a clear "this browser cannot capture audio" message
+rather than a mysterious failure. Nothing to install.
+
+It isn't WiFi-specific either: anything that can route IP to your PC works,
+including USB tethering, ethernet, or the phone's own hotspot.
+
+### Audio backends
+
+| | How the mic is created | Appears as |
+|---|---|---|
+| **PipeWire** (default) | null sink with `media.class=Audio/Source/Virtual` | a normal microphone |
+| **PulseAudio** (fallback) | plain null sink, recorded from its monitor | *Monitor of AnyMic (Phone)* |
+
+PipeWire is preferred and chosen automatically; PulseAudio is used when
+`pw-cat`/`pw-link` are absent. Force one with `--backend pipewire|pulse`.
+
+PulseAudio has no virtual-source type, so there the mic shows up as a monitor.
+Some apps hide monitors behind a "show monitor sources" toggle.
 
 ## Use
 
@@ -97,11 +119,25 @@ second wait.
 ### Options
 
 ```
---port 8443            listen port
---description "..."    name shown in app mic lists
---name AnyMic         PipeWire node name
---certdir ./certs      where the self-signed cert lives
+--port 8443                     listen port
+--description "..."             name shown in app mic lists
+--name AnyMic                   audio node name
+--backend auto|pipewire|pulse   audio backend (default: auto)
+--certdir ./certs               where the self-signed cert lives
 ```
+
+## Tests
+
+```bash
+python3 tests/test_lock.py    # who owns the mic, and when
+python3 tests/test_wire.py    # real server, real WSS, real audio
+```
+
+`test_wire.py` starts its own server on port 8446 under a separate device name,
+so it will not disturb an AnyMic you already have running. It streams a 440Hz
+tone through the whole stack and checks what comes out of the virtual
+microphone is still 440Hz and unbroken. Add `--backend pulse` to exercise the
+PulseAudio path.
 
 ## About that certificate warning
 
@@ -140,11 +176,14 @@ indicator. See [Mic volume](#mic-volume).
 # ~/.config/systemd/user/anymic.service
 [Unit]
 Description=AnyMic phone microphone
-After=pipewire.service
+After=pipewire.service pipewire-pulse.service
+Wants=pipewire.service
 
 [Service]
 ExecStart=/usr/bin/python3 %h/anymic/anymic.py
+KillMode=mixed
 Restart=on-failure
+RestartSec=2
 
 [Install]
 WantedBy=default.target
@@ -152,7 +191,13 @@ WantedBy=default.target
 
 ```bash
 systemctl --user enable --now anymic
+journalctl --user -u anymic -f      # the URL to open is printed here
 ```
+
+`KillMode=mixed` matters. By default systemd signals every process in the
+cgroup, which kills the audio feed before AnyMic can shut it down in order and
+leaves a spurious error in the log. `mixed` signals only the main process and
+lets it tear its own children down.
 
 ## How the audio path works
 
@@ -177,3 +222,36 @@ pw-link anymic-feed:output_MONO AnyMic:input_MONO
 
 The server does both, plus paces writes at exactly real time so the stream
 neither starves nor accumulates latency.
+
+The PulseAudio backend hits a similar snag from the other direction: `pacat -d`
+is the documented way to choose a sink and works on a real PulseAudio daemon,
+but under PipeWire's PulseAudio compatibility layer it is silently overridden
+and the stream lands on the default sink — your speakers. So the backend passes
+`-d` *and* then moves the stream into place with `pactl move-sink-input`, which
+is a no-op wherever `-d` already did the job.
+
+## Security
+
+TLS is not optional here: `getUserMedia` only works in a secure context, and an
+HTTPS page cannot open a plain `ws://` socket. That is fortunate, because the
+audio crosses the network as raw uncompressed PCM — over `ws://` anyone sharing
+your WiFi could dump the payload straight to a WAV file and listen. `wss://`
+also covers the lock token, which travels in the query string.
+
+The certificate is self-signed, so this is strong against passive eavesdropping
+but weak against an active attacker on your LAN who could present their own
+certificate and hope you tap through the warning again. There is no pinning.
+
+Cross-origin WebSocket upgrades are refused. WebSockets are exempt from the
+same-origin policy, so once a browser has accepted the certificate, any page it
+later visits could otherwise open a socket and seize the lock — not to listen,
+but to deny you your own microphone.
+
+The mic lock is not authentication. It stops a second device hijacking a live
+session; it does not stop someone claiming the mic when nobody holds it. On an
+untrusted network, treat the URL as the only thing standing between a stranger
+and the microphone.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
