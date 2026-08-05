@@ -1,0 +1,8 @@
+# cmd.exe misparses batch files that are not CRLF — labels stop resolving and
+# parenthesised blocks fall through — so this one must be checked out with
+# Windows line endings no matter what core.autocrlf says locally.
+*.bat text eol=crlf
+
+*.py   text eol=lf
+*.md   text eol=lf
+*.html text eol=lf
