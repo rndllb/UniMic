@@ -32,8 +32,12 @@ import ssl
 import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import time
+import urllib.error
+import urllib.request
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
@@ -1808,6 +1812,257 @@ def check_setup(device=None):
     return 1
 
 
+# --------------------------------------------------------------------------
+# Releases and updating
+# --------------------------------------------------------------------------
+#  The check lives here rather than in the launchers because Python is the one
+#  runtime all three platforms are guaranteed to have. A .bat could only ever
+#  update Windows users and a .command only macOS ones, and Linux has no
+#  launcher at all.
+#
+#  Finding an update and installing one are deliberately separate. Startup
+#  only ever prints a line; nothing is downloaded or replaced until you ask
+#  for it with --update. Code that silently rewrites itself from the network
+#  turns one compromised account into every user's problem, and a mic that
+#  swaps its own source out mid-call is its own kind of bad.
+
+__version__ = "1.0.0"
+REPO = "rndllb/UniMic"
+LATEST_API = f"https://api.github.com/repos/{REPO}/releases/latest"
+
+# What a release owns. Everything else in the directory belongs to whoever put
+# it there (the certificates and their private key, an edited launcher, a
+# systemd unit) and an update must not touch any of it.
+PAYLOAD = ("unimic.py", "unimic.bat", "unimic.command",
+           "index.html", "README.md", "LICENSE")
+
+UPDATE_CACHE = os.path.join(HERE, ".update-check")
+UPDATE_EVERY = 24 * 60 * 60
+
+
+def parse_version(s):
+    """'v1.2.3' to (1, 2, 3). None for anything not comparable as a number."""
+    parts = (s or "").strip().lstrip("vV").split(".")
+    if not parts or len(parts) > 4:
+        return None
+    try:
+        return tuple(int(p) for p in parts)
+    except ValueError:
+        return None
+
+
+def _tls_context():
+    """A verifying context that also works on a python.org macOS install.
+
+    Those builds ignore the system keychain. They look for a CA bundle inside
+    the framework that does not exist until "Install Certificates.command" has
+    been run, so out of the box every HTTPS request fails to verify. The same
+    installer ships certifi, so use that bundle when the default is empty,
+    rather than doing what the popular answer to this error suggests and
+    switching verification off inside the one function whose job is
+    downloading code that will then be executed.
+    """
+    ctx = ssl.create_default_context()
+    if ctx.get_ca_certs():
+        return ctx
+    try:
+        import certifi
+        ctx.load_verify_locations(certifi.where())
+    except Exception:                                # noqa: BLE001
+        pass
+    if not ctx.get_ca_certs():
+        hint = ""
+        if MACOS:
+            v = f"{sys.version_info.major}.{sys.version_info.minor}"
+            hint = (f'. Run "/Applications/Python {v}/Install '
+                    f'Certificates.command" and try again')
+        raise RuntimeError("no trusted CA certificates are installed for this "
+                           "Python, so the download cannot be verified" + hint)
+    return ctx
+
+
+def _open(url, timeout):
+    req = urllib.request.Request(url, headers={
+        "Accept": "application/vnd.github+json",
+        "User-Agent": f"UniMic/{__version__}"})
+    return urllib.request.urlopen(req, timeout=timeout, context=_tls_context())
+
+
+def fetch_latest(timeout=6):
+    """(tag, zip url) for the newest release, or None if there isn't one."""
+    try:
+        with _open(LATEST_API, timeout) as r:
+            data = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return None     # the repo is fine, it just has no releases yet
+        raise
+    tag = data.get("tag_name")
+    if not tag:
+        return None
+    # GitHub builds a source zip for every tag, so publishing a release needs
+    # no uploaded file at all. An uploaded .zip wins if one is there, which
+    # leaves room to ship a trimmed archive later without changing this.
+    for a in data.get("assets") or []:
+        if a.get("name", "").endswith(".zip") and a.get("browser_download_url"):
+            return tag, a["browser_download_url"]
+    return tag, f"https://github.com/{REPO}/archive/refs/tags/{tag}.zip"
+
+
+def _cached_tag():
+    try:
+        with open(UPDATE_CACHE) as f:
+            c = json.load(f)
+        if time.time() - c["at"] < UPDATE_EVERY:
+            return c.get("tag") or ""
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return None
+
+
+def _cache_tag(tag):
+    try:
+        with open(UPDATE_CACHE, "w") as f:
+            json.dump({"at": time.time(), "tag": tag}, f)
+    except OSError:
+        pass            # read-only install: it just checks again next time
+
+
+def update_notice():
+    """Print one line if a newer release exists, and otherwise say nothing.
+
+    Runs on a background thread, so a slow network, a captive portal or no
+    route at all delays startup by nothing. Every failure here is silent by
+    design: an audio tool that refuses to start because GitHub is unreachable
+    would be a worse tool than one that never mentions updates.
+    """
+    tag = _cached_tag()
+    if tag is None:
+        try:
+            found = fetch_latest()
+        except Exception:                            # noqa: BLE001
+            return
+        tag = found[0] if found else ""
+        _cache_tag(tag)
+    have, want = parse_version(__version__), parse_version(tag)
+    if have and want and want > have:
+        log(f"UniMic {tag} is available (this is {__version__}). "
+            f"Install it with: python3 {os.path.basename(__file__)} --update")
+
+
+def _safe_extract(z, dest):
+    """Extract, refusing any member that would be written outside dest.
+
+    Nothing stops an archive naming '../../.ssh/authorized_keys', and
+    extractall is happy to oblige. The download is from a release of this
+    project, but "we trust the source" is exactly the assumption that makes
+    this class of bug survive.
+    """
+    dest = os.path.abspath(dest)
+    for m in z.infolist():
+        p = os.path.abspath(os.path.join(dest, m.filename))
+        if p != dest and not p.startswith(dest + os.sep):
+            raise ValueError(f"unsafe path in archive: {m.filename}")
+    z.extractall(dest)
+
+
+def _release_root(top):
+    """GitHub wraps a tag's zip in one directory named for the commit."""
+    if os.path.exists(os.path.join(top, "unimic.py")):
+        return top
+    dirs = [os.path.join(top, e) for e in os.listdir(top)
+            if os.path.isdir(os.path.join(top, e))]
+    if len(dirs) == 1 and os.path.exists(os.path.join(dirs[0], "unimic.py")):
+        return dirs[0]
+    return None
+
+
+def do_update():
+    """Fetch the newest release and install it over this copy."""
+    print(f"UniMic {__version__}\n")
+    try:
+        found = fetch_latest(timeout=15)
+    except Exception as e:                           # noqa: BLE001
+        print(f"  [--] could not reach GitHub: {e}")
+        return 1
+    if not found:
+        print("  [--] no releases have been published yet")
+        return 1
+
+    tag, url = found
+    have, want = parse_version(__version__), parse_version(tag)
+    if not want:
+        print(f"  [--] latest release is {tag!r}, which is not a version "
+              f"this can compare against")
+        return 1
+    if have and want <= have:
+        print(f"  [ok] {__version__} is current (newest release is {tag})")
+        return 0
+
+    print(f"  {tag} is available. Downloading...")
+    tmp = tempfile.mkdtemp(prefix="unimic-update-")
+    try:
+        zpath = os.path.join(tmp, "release.zip")
+        with _open(url, 60) as r:
+            with open(zpath, "wb") as f:
+                shutil.copyfileobj(r, f, 64 * 1024)
+
+        root = os.path.join(tmp, "unpacked")
+        with zipfile.ZipFile(zpath) as z:
+            _safe_extract(z, root)
+        src = _release_root(root)
+        if src is None:
+            print("  [--] that archive does not contain unimic.py. "
+                  "Refusing to install it.")
+            return 1
+
+        # Keep what is being replaced. An update that cannot be walked back is
+        # a bad trade for a file you might be mid-call with.
+        backup = os.path.join(HERE, f".backup-{__version__}")
+        os.makedirs(backup, exist_ok=True)
+
+        done = []
+        for name in PAYLOAD:
+            new = os.path.join(src, name)
+            if not os.path.exists(new):
+                continue                    # release dropped this file
+            cur = os.path.join(HERE, name)
+            mode = os.stat(cur).st_mode & 0o777 if os.path.exists(cur) else None
+            if mode is not None:
+                shutil.copy2(cur, os.path.join(backup, name))
+            # Land it beside the target and rename. os.replace is atomic on
+            # both POSIX and Windows, so an interrupted update cannot leave a
+            # half-written unimic.py that will not parse.
+            staged = cur + ".new"
+            shutil.copyfile(new, staged)
+            # Zip carries a mode but extractall does not restore it, so the
+            # launcher would arrive without its executable bit.
+            os.chmod(staged, mode if mode is not None
+                     else (0o755 if name.endswith(".command") else 0o644))
+            os.replace(staged, cur)
+            done.append(name)
+
+        # Force a fresh check rather than leaving today's "newer version
+        # available" cached against the version that just replaced it.
+        try:
+            os.unlink(UPDATE_CACHE)
+        except OSError:
+            pass
+
+        print(f"  [ok] updated to {tag}")
+        print(f"       replaced: {', '.join(done)}")
+        print(f"       previous version kept in {os.path.basename(backup)}/")
+        print()
+        print("  Restart UniMic to run the new version.")
+        return 0
+    except Exception as e:                           # noqa: BLE001
+        print(f"  [--] update failed: {e}")
+        print("       nothing was changed unless a file is listed above")
+        return 1
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
     # --name and --description reach the log verbatim, so any character the
     # user can type can end up on stdout. A Windows console, or any
@@ -1842,12 +2097,25 @@ def main():
     ap.add_argument("--check", action="store_true",
                     help="report whether this machine is ready to run UniMic, "
                          "and exit 0 if it is")
+    ap.add_argument("--version", action="version",
+                    version=f"UniMic {__version__}")
+    ap.add_argument("--update", action="store_true",
+                    help="install the newest release from GitHub over this copy")
+    ap.add_argument("--no-update-check", action="store_true",
+                    help="never contact GitHub to look for a newer release")
     args = ap.parse_args()
 
     if args.list_devices:
         return list_devices()
     if args.check:
         return check_setup(args.device)
+    if args.update:
+        return do_update()
+
+    # Daemon thread: it prints a line at most, and must never be the reason
+    # the server is slow to come up or fails to shut down.
+    if not args.no_update_check:
+        threading.Thread(target=update_notice, daemon=True).start()
 
     if LINUX:
         # Linux builds the virtual source itself, so it needs the tools to do

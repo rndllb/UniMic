@@ -1,5 +1,9 @@
-# Generated at runtime — contains a TLS private key. Never commit.
+# Generated at runtime, and contains a TLS private key. Never commit.
 certs/
+
+# Written by the daily update check.
+.update-check
+.backup-*/
 
 __pycache__/
 *.pyc
