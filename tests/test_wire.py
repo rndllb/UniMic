@@ -2,7 +2,7 @@
 """End-to-end tests: starts a real server, talks WSS to it, checks the audio.
 
 Runs on a spare port under its own device name, so it will not disturb an
-AnyMic you already have running.
+UniMic you already have running.
 
     python3 tests/test_wire.py [--backend ...]
 
@@ -30,16 +30,16 @@ import time
 import wave
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SERVER = os.path.join(HERE, "..", "anymic.py")
+SERVER = os.path.join(HERE, "..", "unimic.py")
 HOST, PORT = "127.0.0.1", 8446
-NAME = "AnyMicTest"
+NAME = "UniMicTest"
 
 sys.path.insert(0, os.path.join(HERE, ".."))
-import anymic  # noqa: E402
+import unimic  # noqa: E402
 
-WINDOWS = anymic.WINDOWS
-MACOS = anymic.MACOS
-LINUX = anymic.LINUX
+WINDOWS = unimic.WINDOWS
+MACOS = unimic.MACOS
+LINUX = unimic.LINUX
 
 failures = []
 
@@ -178,7 +178,7 @@ def spawn_server(extra_args):
         kw["start_new_session"] = True
     return subprocess.Popen(
         [sys.executable, SERVER, "--port", str(PORT), "--name", NAME,
-         "--description", "AnyMic Test"] + extra_args,
+         "--description", "UniMic Test"] + extra_args,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, **kw)
 
 
@@ -222,15 +222,15 @@ def find_cable():
     if LINUX:
         return None, None                    # Linux makes its own source
     if WINDOWS:
-        for pre, pick, _ in anymic.WINDOWS_CABLES:
-            for _, nm in anymic.WinMMMic.playback_devices():
+        for pre, pick, _ in unimic.WINDOWS_CABLES:
+            for _, nm in unimic.WinMMMic.playback_devices():
                 if nm.startswith(pre):
                     # waveIn truncates names to 31 characters too, so match on
                     # the part before the vendor suffix rather than the whole.
                     return nm, pick.split(" (")[0]
         return None, None
-    for want in anymic.MAC_CABLES:
-        for _, nm in anymic.CoreAudioMic.output_devices():
+    for want in unimic.MAC_CABLES:
+        for _, nm in unimic.CoreAudioMic.output_devices():
             if want.lower() in nm.lower():
                 return nm, nm
     return None, None
@@ -324,7 +324,7 @@ class WinRecorder:
 
         # Reuse the server's WAVEFORMATEX/WAVEHDR definitions so the two halves
         # of the test cannot drift apart.
-        m = anymic.WinMMMic._load()
+        m = unimic.WinMMMic._load()
         self.WAVEHDR = m["WAVEHDR"]
         HWAVEIN = ctypes.c_void_p
         self.mm.waveInOpen.argtypes = [ctypes.POINTER(HWAVEIN), ctypes.c_size_t,
@@ -420,7 +420,7 @@ def drain_check(backend_cls, device):
     falls short of the elapsed time — both of which this catches without
     needing anything to record from.
     """
-    mic = backend_cls(NAME + "Drain", "AnyMic Drain Test", device=device)
+    mic = backend_cls(NAME + "Drain", "UniMic Drain Test", device=device)
     written = [0]
     inner = mic._write
 
@@ -448,7 +448,7 @@ def drain_check(backend_cls, device):
     finally:
         mic.stop()
 
-    expected = elapsed / (anymic.CHUNK_MS / 1000.0)
+    expected = elapsed / (unimic.CHUNK_MS / 1000.0)
     ratio = written[0] / expected
     check("audio device drains at real time", 0.9 < ratio < 1.1,
           f"{written[0]} chunks in {elapsed:.1f}s, expected ~{expected:.0f}")
@@ -465,7 +465,7 @@ def audio_check(target):
         print(f"  SKIP  audio round-trip ({RECORDER.__name__} unavailable)")
         return
 
-    wav = os.path.join(tempfile.gettempdir(), f"anymic-test-{os.getpid()}.wav")
+    wav = os.path.join(tempfile.gettempdir(), f"unimic-test-{os.getpid()}.wav")
     try:
         rec = RECORDER(target, wav)
     except Exception as e:                              # noqa: BLE001
@@ -509,7 +509,7 @@ def audio_check(target):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--backend", default="auto",
-                    choices=("auto",) + tuple(sorted(anymic.BACKENDS)))
+                    choices=("auto",) + tuple(sorted(unimic.BACKENDS)))
     ap.add_argument("--device", help="override the virtual cable to test against")
     args = ap.parse_args()
 
@@ -526,7 +526,7 @@ def main():
                   "the audio round-trip will be skipped")
 
     print("--- the audio path itself ---")
-    backend_cls = anymic.choose_backend(args.backend)
+    backend_cls = unimic.choose_backend(args.backend)
     drain_check(backend_cls, None if LINUX else (device or "default"))
 
     proc = spawn_server(extra)
@@ -541,7 +541,7 @@ def main():
     try:
         print("--- the page is served over TLS ---")
         status, body = fetch("/")
-        check("GET / returns the phone page", status == 200 and b"AnyMic" in body,
+        check("GET / returns the phone page", status == 200 and b"UniMic" in body,
               f"HTTP {status}, {len(body)} bytes")
         check("the page carries the capture worklet",
               b"registerProcessor('pcm'" in body)
@@ -599,7 +599,7 @@ def main():
         e.drop()
 
         print("--- audio actually flows ---")
-        time.sleep(anymic.MicLock.RESERVE_SECONDS + 0.5)
+        time.sleep(unimic.MicLock.RESERVE_SECONDS + 0.5)
         audio_check(record_from)
 
     finally:

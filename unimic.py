@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-AnyMic — turn any phone into a microphone, over the browser.
+UniMic — turn any phone into a microphone, over the browser.
 
 No phone app. The phone's browser captures the mic and streams raw PCM over a
 WebSocket; this server feeds it into a virtual audio device that every app sees
 as a normal microphone.
 
-    python3 anymic.py
+    python3 unimic.py
 
 Then open the printed https:// URL on the phone and tap Start.
 
 Linux creates the virtual microphone itself, through PipeWire or PulseAudio.
 Windows and macOS have no user-mode way to invent a capture device — that takes
-a driver — so there AnyMic plays into a virtual audio cable you install once
+a driver — so there UniMic plays into a virtual audio cable you install once
 (VB-CABLE or BlackHole) and apps record from the other end of it.
 """
 
@@ -64,7 +64,7 @@ QUIET = False       # --check reports for itself; the running commentary is nois
 
 def log(msg):
     if not QUIET:
-        print(f"[anymic] {msg}", flush=True)
+        print(f"[unimic] {msg}", flush=True)
 
 
 # --------------------------------------------------------------------------
@@ -159,7 +159,7 @@ class VirtualMic:
 
     BACKEND = "?"
 
-    def __init__(self, name="AnyMic", description="AnyMic (Phone)", device=None):
+    def __init__(self, name="UniMic", description="UniMic (Phone)", device=None):
         self.name = name
         self.description = description
         self.device = device        # user's --device override, if any
@@ -333,7 +333,7 @@ class PipeWireMic(PulseCtlMic):
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
-        self.feed_node = "anymic-feed"
+        self.feed_node = "unimic-feed"
 
     def ready_lines(self):
         return [f"   Select '{self.description}' as the mic in your apps."]
@@ -480,18 +480,18 @@ WINDOWS_CABLES = [
 CABLE_HELP_WINDOWS = """\
 No virtual audio cable was found.
 
-Windows cannot invent a microphone without a driver, so AnyMic needs one
+Windows cannot invent a microphone without a driver, so UniMic needs one
 installed. VB-CABLE is free, about 2 MB, and the usual choice:
 
     https://vb-audio.com/Cable/
 
 Download it, right-click VBCABLE_Setup_x64.exe, "Run as administrator",
-then reboot. AnyMic will find it automatically on the next run.
+then reboot. UniMic will find it automatically on the next run.
 
 VoiceMeeter (winget install VB-Audio.Voicemeeter) also works if you happen
 to have it.
 
-To try AnyMic without installing anything, run it with
+To try UniMic without installing anything, run it with
 
     --device default
 
@@ -745,7 +745,7 @@ class WinMMMic(VirtualMic):
             return ["   Playing to your speakers. This is not a microphone —",
                     "   install a virtual cable to make it one."]
         return [f"   Select '{self._pick}' as the mic in your apps.",
-                f"   ({self._product} is carrying the audio; AnyMic plays into",
+                f"   ({self._product} is carrying the audio; UniMic plays into",
                 f"    '{self._dev_name}' and your apps record the other end.)"]
 
 
@@ -759,7 +759,7 @@ MAC_CABLES = ["BlackHole 2ch", "BlackHole 16ch", "BlackHole 64ch",
 CABLE_HELP_MACOS = """\
 No virtual audio cable was found.
 
-macOS cannot invent a microphone without an audio driver, so AnyMic needs
+macOS cannot invent a microphone without an audio driver, so UniMic needs
 one installed. BlackHole is free, open source, and the usual choice:
 
     brew install blackhole-2ch
@@ -767,10 +767,10 @@ one installed. BlackHole is free, open source, and the usual choice:
 (or download the installer from https://existential.audio/blackhole/)
 
 You will be asked to allow the system extension in System Settings ->
-Privacy & Security, then log out and back in. AnyMic finds it automatically
+Privacy & Security, then log out and back in. UniMic finds it automatically
 after that.
 
-To try AnyMic without installing anything, run it with
+To try UniMic without installing anything, run it with
 
     --device default
 
@@ -1080,7 +1080,7 @@ class CoreAudioMic(VirtualMic):
             return ["   Playing to your speakers. This is not a microphone —",
                     "   install BlackHole to make it one."]
         return [f"   Select '{self._dev_name}' as the mic in your apps.",
-                "   (AnyMic plays into it; apps record the same device.)"]
+                "   (UniMic plays into it; apps record the same device.)"]
 
 
 class FFmpegMic(SubprocessFeedMic):
@@ -1338,7 +1338,7 @@ class MicLock:
 
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
-    server_version = "anymic"
+    server_version = "unimic"
 
     def log_message(self, fmt, *args):
         pass  # the interesting events are logged explicitly
@@ -1607,13 +1607,13 @@ def _pem(label, der):
 
 
 def _self_signed(ip, days=3650):
-    """Return (cert_pem, key_pem) for a CN=anymic certificate covering `ip`."""
+    """Return (cert_pem, key_pem) for a CN=unimic certificate covering `ip`."""
     key = _gen_rsa(2048)
 
     spki = _der_seq(
         _der_seq(_der_oid(_OID_RSA), _DER_NULL),
         _der_bits(_der_seq(_der_int(key["n"]), _der_int(key["e"]))))
-    name = _der_seq(_der_set(_der_seq(_der_oid(_OID_CN), _der_utf8("anymic"))))
+    name = _der_seq(_der_set(_der_seq(_der_oid(_OID_CN), _der_utf8("unimic"))))
     sig_alg = _der_seq(_der_oid(_OID_SHA256_RSA), _DER_NULL)
 
     now = time.time()
@@ -1685,7 +1685,7 @@ def ensure_cert(certdir, ip):
         r = subprocess.run([
             "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
             "-keyout", keyf, "-out", cert, "-days", "3650",
-            "-subj", "/CN=anymic",
+            "-subj", "/CN=unimic",
             "-addext", f"subjectAltName=IP:{ip},IP:127.0.0.1,DNS:localhost",
         ], capture_output=True, text=True)
         if r.returncode != 0:
@@ -1746,20 +1746,20 @@ def list_devices():
                 c.lower() in nm.lower() for c in MAC_CABLES) else ""
             print(f"  {nm}{mark}")
     else:
-        print("On Linux AnyMic creates its own virtual source; there is no "
+        print("On Linux UniMic creates its own virtual source; there is no "
               "device to choose.")
     return 0
 
 
 def check_setup(device=None):
-    """Report whether this machine can run AnyMic. Exit status 0 means yes.
+    """Report whether this machine can run UniMic. Exit status 0 means yes.
 
-    Written for anymic.bat to call, but useful on its own — it answers "why is
+    Written for unimic.bat to call, but useful on its own — it answers "why is
     there no microphone" without starting a server or touching the audio graph.
     """
     global QUIET
     QUIET = True
-    print("AnyMic setup check\n")
+    print("UniMic setup check\n")
     print(f"  [ok]  Python {sys.version.split()[0]}")
     ready, hint = True, None
 
@@ -1799,7 +1799,7 @@ def check_setup(device=None):
 
     print()
     if ready:
-        print("Ready. Run: python anymic.py")
+        print("Ready. Run: python unimic.py")
         return 0
     if hint:
         print(hint)
@@ -1821,11 +1821,11 @@ def main():
             pass
 
     ap = argparse.ArgumentParser(
-        prog="anymic", description="AnyMic — turn any phone into a microphone.")
+        prog="unimic", description="UniMic — turn any phone into a microphone.")
     ap.add_argument("--port", type=int, default=8443)
-    ap.add_argument("--name", default="AnyMic",
+    ap.add_argument("--name", default="UniMic",
                     help="audio node name (Linux only)")
-    ap.add_argument("--description", default="AnyMic (Phone)",
+    ap.add_argument("--description", default="UniMic (Phone)",
                     help="name shown in app microphone lists (Linux only)")
     ap.add_argument("--certdir", default=os.path.join(HERE, "certs"))
     ap.add_argument("--backend",
@@ -1839,7 +1839,7 @@ def main():
     ap.add_argument("--list-devices", action="store_true",
                     help="show the playback devices --device can pick from")
     ap.add_argument("--check", action="store_true",
-                    help="report whether this machine is ready to run AnyMic, "
+                    help="report whether this machine is ready to run UniMic, "
                          "and exit 0 if it is")
     args = ap.parse_args()
 
@@ -1854,8 +1854,8 @@ def main():
         # certificate no longer needs openssl on any platform.
         if not shutil.which("pactl"):
             sys.exit("missing required tool: pactl")
-    elif args.name != "AnyMic" or args.description != "AnyMic (Phone)":
-        log("--name/--description only apply on Linux, where AnyMic creates "
+    elif args.name != "UniMic" or args.description != "UniMic (Phone)":
+        log("--name/--description only apply on Linux, where UniMic creates "
             "the device; elsewhere the cable's own name is what apps show")
 
     backend = choose_backend(args.backend)
@@ -1874,7 +1874,7 @@ def main():
         httpd = Server(("0.0.0.0", args.port), Handler)
     except OSError as e:
         if e.errno == errno.EADDRINUSE:
-            sys.exit(f"port {args.port} is already in use — AnyMic may "
+            sys.exit(f"port {args.port} is already in use — UniMic may "
                      f"already be running. Use --port to pick another.")
         raise
     httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
@@ -1889,7 +1889,7 @@ def main():
     url = f"https://{ip}:{args.port}/"
     print()
     print("  " + "=" * 52)
-    print("   A N Y M I C")
+    print("   U N I M I C")
     print(f"   Open this on your phone:   {url}")
     print("  " + "=" * 52)
     print("   The certificate is self-signed, so the browser will warn.")
@@ -1953,7 +1953,7 @@ def start_mic(backend, args):
                 log(f"{cls.BACKEND} backend failed ({e}) — trying "
                     f"{attempts[i + 1].BACKEND}")
 
-    print(f"\nanymic: {last}", file=sys.stderr)
+    print(f"\nunimic: {last}", file=sys.stderr)
     hint = getattr(last, "hint", None)
     if hint:
         print("\n" + hint, file=sys.stderr)

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#111113">
-<title>AnyMic</title>
+<title>UniMic</title>
 <style>
   /* Palette lifted from EZ RENDER / EZ VETRO so this sits in the same family.
      Both apps are dark-only, so this is too. */
@@ -150,7 +150,7 @@
 </head>
 <body>
 <header>
-  <h1 class="brand">AnyMic</h1>
+  <h1 class="brand">UniMic</h1>
   <div class="pill"><span class="dot" id="dot"></span><span id="state">Idle</span></div>
 </header>
 
@@ -235,12 +235,12 @@ function applyGain(pct, persist) {
     // Short ramp — jumping gain.value outright produces an audible click.
     gain.gain.setTargetAtTime(pct / 100, ctx.currentTime, 0.015);
   }
-  if (persist) { try { localStorage.setItem('anymic.gain', pct); } catch (_) {} }
+  if (persist) { try { localStorage.setItem('unimic.gain', pct); } catch (_) {} }
 }
 
 (function restoreGain() {
   let saved = null;
-  try { saved = localStorage.getItem('anymic.gain'); } catch (_) {}
+  try { saved = localStorage.getItem('unimic.gain'); } catch (_) {}
   if (saved !== null && !isNaN(+saved)) $('vol').value = saved;
   $('volval').textContent = $('vol').value + '%';
 })();
@@ -357,7 +357,7 @@ function connect() {
   // The token proves we are the device that already holds the mic, so a
   // dropped connection can be resumed by us and not stolen by someone else.
   let tok = null;
-  try { tok = localStorage.getItem('anymic.token'); } catch (_) {}
+  try { tok = localStorage.getItem('unimic.token'); } catch (_) {}
   ws = new WebSocket(`wss://${location.host}/ws` +
                      (tok ? '?token=' + encodeURIComponent(tok) : ''));
   ws.binaryType = 'arraybuffer';
@@ -371,7 +371,7 @@ function connect() {
     let m;
     try { m = JSON.parse(e.data); } catch (_) { return; }
     if (m.type === 'hello') {
-      try { localStorage.setItem('anymic.token', m.token); } catch (_) {}
+      try { localStorage.setItem('unimic.token', m.token); } catch (_) {}
     } else if (m.type === 'stats') {
       $('s-buf').textContent = m.buffer_ms + ' ms';
       $('s-under').textContent = m.underruns;

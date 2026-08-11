@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the built-in certificate generator.
 
-AnyMic emits its own self-signed certificate when openssl is not around, which
+UniMic emits its own self-signed certificate when openssl is not around, which
 is the normal case on Windows. A certificate that OpenSSL will not parse means
 a browser that will not connect, so this checks the DER is real: the pair
 loads, a verifying client completes a handshake against it, and the SAN carries
@@ -20,7 +20,7 @@ import threading
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import anymic  # noqa: E402
+import unimic  # noqa: E402
 
 failures = []
 
@@ -72,13 +72,13 @@ def handshake(cert, key, ip):
 
 def main():
     ip = "192.168.1.190"
-    tmp = tempfile.mkdtemp(prefix="anymic-cert-")
+    tmp = tempfile.mkdtemp(prefix="unimic-cert-")
     cert = os.path.join(tmp, "cert.pem")
     key = os.path.join(tmp, "key.pem")
 
     print("--- the built-in generator ---")
     t0 = time.monotonic()
-    cert_pem, key_pem = anymic._self_signed(ip)
+    cert_pem, key_pem = unimic._self_signed(ip)
     took = time.monotonic() - t0
     check("generates a certificate in reasonable time", took < 60, f"{took:.1f}s")
     check("emits PEM of the expected shape",
@@ -102,8 +102,8 @@ def main():
     check("the LAN address is in the SAN", ("IP Address", ip) in san, str(san))
     check("127.0.0.1 is in the SAN", ("IP Address", "127.0.0.1") in san)
     check("localhost is in the SAN", ("DNS", "localhost") in san)
-    check("the subject is CN=anymic",
-          ("commonName", "anymic") in [x for rdn in peer["subject"] for x in rdn])
+    check("the subject is CN=unimic",
+          ("commonName", "unimic") in [x for rdn in peer["subject"] for x in rdn])
 
     # An independent parser is worth having when we wrote the DER by hand.
     if shutil.which("openssl"):
@@ -126,15 +126,15 @@ def main():
         print("  SKIP  second opinion from openssl (not installed)")
 
     print("--- ensure_cert on disk ---")
-    d2 = tempfile.mkdtemp(prefix="anymic-ensure-")
-    c1, k1 = anymic.ensure_cert(d2, ip)
+    d2 = tempfile.mkdtemp(prefix="unimic-ensure-")
+    c1, k1 = unimic.ensure_cert(d2, ip)
     m1 = os.path.getmtime(c1)
     check("writes a cert and key", os.path.exists(c1) and os.path.exists(k1))
     time.sleep(1.1)
-    c2, _ = anymic.ensure_cert(d2, ip)
+    c2, _ = unimic.ensure_cert(d2, ip)
     check("reuses the certificate for the same address",
           os.path.getmtime(c2) == m1)
-    anymic.ensure_cert(d2, "10.0.0.7")
+    unimic.ensure_cert(d2, "10.0.0.7")
     check("regenerates when the LAN address changes",
           os.path.getmtime(c1) != m1)
 

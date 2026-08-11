@@ -8,7 +8,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import anymic  # noqa: E402
+import unimic  # noqa: E402
 
 failures = []
 
@@ -20,8 +20,8 @@ def check(name, cond):
 
 
 def main():
-    anymic.MicLock.RESERVE_SECONDS = 1.0     # keep the expiry test quick
-    lock = anymic.MicLock()
+    unimic.MicLock.RESERVE_SECONDS = 1.0     # keep the expiry test quick
+    lock = unimic.MicLock()
 
     granted, tok_a, _ = lock.claim(None, "phoneA")
     check("first caller is granted", granted and tok_a)
@@ -48,7 +48,7 @@ def main():
 
     # --- the reservation eventually lapses ---
     lock.release(tok_a, deliberate=False)
-    time.sleep(anymic.MicLock.RESERVE_SECONDS + 0.2)
+    time.sleep(unimic.MicLock.RESERVE_SECONDS + 0.2)
     granted, tok_b, _ = lock.claim(None, "phoneB")
     check("a stranger is granted once the reservation lapses", granted)
     check("a lapsed reservation issues a fresh token", tok_b != tok_a)

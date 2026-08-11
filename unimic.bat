@@ -1,18 +1,18 @@
 @echo off
 rem ===========================================================================
-rem  AnyMic launcher for Windows.
+rem  UniMic launcher for Windows.
 rem
 rem  Checks the two things Windows needs that Linux does not -- a real Python,
 rem  and a virtual audio cable -- offers to install whichever is missing, and
 rem  then starts the server. Any arguments are passed straight through, so
-rem  "anymic.bat --port 9000" works like "python anymic.py --port 9000".
+rem  "unimic.bat --port 9000" works like "python unimic.py --port 9000".
 rem ===========================================================================
 
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
 echo.
-echo   A N Y M I C   -   Windows launcher
+echo   U N I M I C   -   Windows launcher
 echo.
 
 rem --------------------------------------------------------------------------
@@ -90,7 +90,7 @@ for %%C in (
 
 echo   [--] Python still is not runnable from here.
 echo        It may only need a new terminal to appear on the PATH.
-echo        Close this window, open a new one, and run anymic.bat again.
+echo        Close this window, open a new one, and run unimic.bat again.
 goto :fail
 
 :python_manual
@@ -104,12 +104,12 @@ for /f "tokens=2" %%V in ('%PY% --version 2^>^&1') do set "PYVER=%%V"
 echo   [ok] Python !PYVER!
 
 rem --------------------------------------------------------------------------
-rem  2. Ask AnyMic itself whether the audio side is ready.
+rem  2. Ask UniMic itself whether the audio side is ready.
 rem --------------------------------------------------------------------------
 rem  Rather than second-guessing the device list from batch, run the same
 rem  detection the server uses. --check exits 0 when a cable is present.
 
-%PY% anymic.py --check >nul 2>&1
+%PY% unimic.py --check >nul 2>&1
 if not errorlevel 1 (
   echo   [ok] Virtual audio cable found
   goto :run
@@ -117,7 +117,7 @@ if not errorlevel 1 (
 
 echo   [--] No virtual audio cable is installed.
 echo.
-echo        Windows cannot present a microphone without a driver, so AnyMic
+echo        Windows cannot present a microphone without a driver, so UniMic
 echo        plays into a virtual cable and your apps record the other end.
 echo        VB-CABLE is free, about 1 MB, and the usual choice.
 echo.
@@ -129,7 +129,7 @@ echo   Download and install VB-CABLE from vb-audio.com now?
 set /p "ANS=  [y/N] "
 if /i not "!ANS!"=="y" goto :cable_manual
 
-set "TMPDIR=%TEMP%\anymic-vbcable"
+set "TMPDIR=%TEMP%\unimic-vbcable"
 if exist "%TMPDIR%" rd /s /q "%TMPDIR%" >nul 2>&1
 mkdir "%TMPDIR%" >nul 2>&1
 
@@ -172,7 +172,7 @@ powershell -NoProfile -Command ^
 
 echo.
 echo   Re-checking...
-%PY% anymic.py --check >nul 2>&1
+%PY% unimic.py --check >nul 2>&1
 if not errorlevel 1 (
   echo   [ok] Virtual audio cable found
   goto :run
@@ -180,7 +180,7 @@ if not errorlevel 1 (
 
 echo   [--] Still not detected.
 echo        The driver usually works immediately, but some machines need a
-echo        reboot to finish. Reboot and run anymic.bat again.
+echo        reboot to finish. Reboot and run unimic.bat again.
 goto :fail
 
 :cable_manual
@@ -189,7 +189,7 @@ echo        To install it by hand:
 echo          1. Download https://vb-audio.com/Cable/
 echo          2. Unzip it anywhere
 echo          3. Right-click VBCABLE_Setup_x64.exe, "Run as administrator"
-echo          4. Reboot if prompted, then run anymic.bat again
+echo          4. Reboot if prompted, then run unimic.bat again
 echo.
 echo        VoiceMeeter and Virtual Audio Cable also work if you have one.
 goto :fail
@@ -199,19 +199,19 @@ rem  3. Start the server.
 rem --------------------------------------------------------------------------
 :run
 echo.
-echo   Starting AnyMic. Press Ctrl-C to stop.
+echo   Starting UniMic. Press Ctrl-C to stop.
 echo.
 echo   If your phone cannot reach the page, allow Python through the
 echo   firewall on Private networks -- Windows asks only once.
 echo.
-%PY% anymic.py %*
+%PY% unimic.py %*
 set "RC=!errorlevel!"
 
 rem A double-click gets a window that would otherwise vanish with the error in
 rem it. A run from an existing prompt should just return.
 if not "!RC!"=="0" (
   echo.
-  echo   AnyMic exited with code !RC!.
+  echo   UniMic exited with code !RC!.
   echo %CMDCMDLINE% | find /i "/c" >nul && pause
 )
 endlocal & exit /b %RC%

@@ -1,22 +1,22 @@
 #!/bin/bash
 # ===========================================================================
-#  AnyMic launcher for macOS.
+#  UniMic launcher for macOS.
 #
-#  The counterpart to anymic.bat: checks the two things macOS needs that
+#  The counterpart to unimic.bat: checks the two things macOS needs that
 #  Linux does not -- a real Python, and a virtual audio cable -- offers to
 #  install whichever is missing, and then starts the server. Any arguments
-#  are passed straight through, so "./anymic.command --port 9000" works like
-#  "python3 anymic.py --port 9000".
+#  are passed straight through, so "./unimic.command --port 9000" works like
+#  "python3 unimic.py --port 9000".
 #
 #  The .command extension is what makes this double-clickable in Finder;
 #  macOS hands it to Terminal. It needs its executable bit to stay set.
 # ===========================================================================
 
 # Finder starts a double-clicked .command in the user's home directory, not
-# beside the script, so anymic.py would not be found without this.
+# beside the script, so unimic.py would not be found without this.
 cd "$(dirname "$0")" || exit 1
 
-printf '\n  A N Y M I C   -   macOS launcher\n\n'
+printf '\n  U N I M I C   -   macOS launcher\n\n'
 
 ok()   { printf '  [ok] %s\n' "$1"; }
 bad()  { printf '  [--] %s\n' "$1"; }
@@ -149,7 +149,7 @@ if ! find_python; then
   if ! find_python; then
     bad 'Python still is not runnable from here.'
     note 'It may only need a new terminal to appear on the PATH. Close this'
-    note 'window, open a new one, and run anymic.command again.'
+    note 'window, open a new one, and run unimic.command again.'
     fail
   fi
 fi
@@ -157,7 +157,7 @@ fi
 ok "Python $("$PY" -c 'import platform; print(platform.python_version())')"
 
 # ---------------------------------------------------------------------------
-#  2. Ask AnyMic itself whether the audio side is ready.
+#  2. Ask UniMic itself whether the audio side is ready.
 # ---------------------------------------------------------------------------
 #  Rather than second-guessing the device list from shell, run the same
 #  detection the server uses. --check exits 0 when a cable is present. The
@@ -166,7 +166,7 @@ ok "Python $("$PY" -c 'import platform; print(platform.python_version())')"
 #  should not be nagged to install one.
 
 cable_ready() {
-  CHECK_OUT=$("$PY" anymic.py --check "$@" 2>&1)
+  CHECK_OUT=$("$PY" unimic.py --check "$@" 2>&1)
   return $?
 }
 
@@ -179,9 +179,9 @@ else
   # reporting that as a missing cable would send the user off to install a
   # driver they already have. Hand them the real error instead.
   case "$CHECK_OUT" in
-    "AnyMic setup check"*) ;;
+    "UniMic setup check"*) ;;
     *)
-      bad 'AnyMic could not start:'
+      bad 'UniMic could not start:'
       printf '\n%s\n' "$CHECK_OUT"
       fail
       ;;
@@ -208,11 +208,11 @@ cable_manual() {
   note 'To install it by hand:'
   note '  1. Download BlackHole from https://existential.audio/blackhole/'
   note '  2. Open the .pkg and follow the installer'
-  note '  3. Reboot, or log out and back in, then run anymic.command again'
+  note '  3. Reboot, or log out and back in, then run unimic.command again'
   printf '\n'
   note 'Loopback and Soundflower work too if you already have one.'
   printf '\n'
-  note 'To try AnyMic without installing a driver, run it with'
+  note 'To try UniMic without installing a driver, run it with'
   note '"--device default" -- the phone comes out of your speakers instead.'
   note 'Useful for checking the phone half works, but no app can record it.'
   fail
@@ -227,7 +227,7 @@ recheck_cable() {
   bad 'Still not detected.'
   note 'BlackHole is a CoreAudio plug-in and the audio daemon has to restart'
   note 'before it appears. Log out and back in -- or reboot -- and run'
-  note 'anymic.command again.'
+  note 'unimic.command again.'
   fail
 }
 
@@ -243,7 +243,7 @@ install_via_brew() {
 
 install_via_download() {
   local tmp pkg sum sig
-  tmp=$(mktemp -d "${TMPDIR:-/tmp}/anymic-blackhole.XXXXXX") || cable_manual
+  tmp=$(mktemp -d "${TMPDIR:-/tmp}/unimic-blackhole.XXXXXX") || cable_manual
   # Leaving a downloaded installer behind is untidy at best; clear it on every
   # exit from here, including the ones that go through cable_manual.
   trap 'rm -rf "$tmp"' EXIT
@@ -286,7 +286,7 @@ install_via_download() {
 
 if [ "$CABLE_OK" -eq 0 ]; then
   printf '\n'
-  note 'macOS cannot present a microphone without a driver, so AnyMic plays'
+  note 'macOS cannot present a microphone without a driver, so UniMic plays'
   note 'into a virtual cable and your apps record the other end.'
   note 'BlackHole is free, open source, about 100 KB, and the usual choice.'
   printf '\n'
@@ -307,15 +307,15 @@ fi
 # ---------------------------------------------------------------------------
 #  3. Start the server.
 # ---------------------------------------------------------------------------
-printf '\n  Starting AnyMic. Press Ctrl-C to stop.\n\n'
+printf '\n  Starting UniMic. Press Ctrl-C to stop.\n\n'
 printf '  If your phone cannot reach the page, allow Python to accept\n'
 printf '  incoming connections -- macOS asks only once.\n\n'
 
-"$PY" anymic.py "$@"
+"$PY" unimic.py "$@"
 RC=$?
 
 if [ "$RC" -ne 0 ]; then
-  printf '\n  AnyMic exited with code %s.\n' "$RC"
+  printf '\n  UniMic exited with code %s.\n' "$RC"
   pause_if_finder
 fi
 exit "$RC"

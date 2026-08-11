@@ -1,4 +1,4 @@
-# AnyMic
+# UniMic
 
 Turn any phone into a microphone, on Linux, Windows or macOS. No phone app.
 
@@ -7,7 +7,7 @@ A small Python server feeds that into a **virtual audio device**, which every
 app — Discord, OBS, Zoom, browsers — sees as an ordinary microphone.
 
 ```
-phone browser ──wss──> anymic.py ──> virtual audio device ──> your apps
+phone browser ──wss──> unimic.py ──> virtual audio device ──> your apps
  getUserMedia          jitter buffer
 ```
 
@@ -15,30 +15,15 @@ Where that virtual device comes from is the one thing that differs by platform:
 
 | | Virtual mic | Needs installing |
 |---|---|---|
-| **Linux** | AnyMic creates a PipeWire virtual source itself | nothing |
+| **Linux** | UniMic creates a PipeWire virtual source itself | nothing |
 | **Windows** | plays into [VB-CABLE](https://vb-audio.com/Cable/), apps record its other end | VB-CABLE, once |
 | **macOS** | plays into [BlackHole](https://existential.audio/blackhole/), apps record the same device | BlackHole, once |
 
 Only Linux can conjure a microphone out of nothing. Windows and macOS both
-require a driver to create a capture endpoint, so there AnyMic sits on top of a
+require a driver to create a capture endpoint, so there UniMic sits on top of a
 free virtual audio cable you install once and forget. Everything above that
 line — the page, the jitter buffer, the mic lock, TLS — is the same code on all
 three.
-
-## What it looks like
-
-Start it on the PC — it sets the virtual mic up, prints the URL to open, and
-names the device to select in your apps (screenshot is Linux; Windows and macOS
-print the cable's name instead):
-
-![AnyMic starting up and a phone connecting](docs/server.png)
-
-Open that URL on the phone, tap **Start microphone**, and it streams:
-
-<img src="docs/phone.png" alt="AnyMic running in mobile Safari, showing the level meter, mic volume slider and live stats" width="330">
-
-The stats are live: buffer depth, bytes sent, dropout count and link state, so
-you can tell at a glance whether audio is actually flowing rather than guessing.
 
 ## Why not Wo Mic
 
@@ -46,7 +31,7 @@ Wo Mic needs a phone app talking a proprietary protocol to an unmaintained Linux
 client, and routes audio through the `snd-aloop` kernel module. That stack has
 some sharp edges this avoids:
 
-| | Wo Mic | AnyMic |
+| | Wo Mic | UniMic |
 |---|---|---|
 | Phone side | App install, protocol must match client version | Any modern browser |
 | Audio routing | `snd-aloop` kernel module, needs root, gone after reboot | PipeWire virtual source, user-level (Linux); a cable you already chose (Windows, macOS) |
@@ -57,7 +42,7 @@ some sharp edges this avoids:
 | iPhone | Not supported | Works |
 
 On Windows and macOS a driver has to come from somewhere either way — the
-difference is that AnyMic uses a general-purpose one you can point at anything,
+difference is that UniMic uses a general-purpose one you can point at anything,
 rather than a proprietary one that only its own client can talk to.
 
 ## Requirements
@@ -71,12 +56,12 @@ rather than a proprietary one that only its own client can talk to.
   administrator. VoiceMeeter and Virtual Audio Cable work too if you already
   have one.
 - **macOS** — [BlackHole](https://existential.audio/blackhole/), via
-  `brew install blackhole-2ch` or the installer, or let `anymic.command` do it.
+  `brew install blackhole-2ch` or the installer, or let `unimic.command` do it.
   You will need to allow the system extension in *System Settings → Privacy &
   Security*, and log out and back in before it appears.
 
 `openssl` is used when it is present but is no longer required; without it
-AnyMic generates its own certificate.
+UniMic generates its own certificate.
 
 **On the phone:** any browser with AudioWorklet support, which in practice
 means **Chrome 66+, Firefox 76+, or Safari 14.1 / iOS 14.5+** — roughly 2021
@@ -93,7 +78,7 @@ The right one is chosen automatically. Force one with `--backend`.
 | Backend | Platform | How the mic is created | Appears as |
 |---|---|---|---|
 | `pipewire` | Linux | null sink with `media.class=Audio/Source/Virtual` | a normal microphone |
-| `pulse` | Linux | plain null sink, recorded from its monitor | *Monitor of AnyMic (Phone)* |
+| `pulse` | Linux | plain null sink, recorded from its monitor | *Monitor of UniMic (Phone)* |
 | `winmm` | Windows | plays into an installed cable via `waveOut` | *CABLE Output (VB-Audio Virtual Cable)* |
 | `coreaudio` | macOS | plays into BlackHole via an AudioQueue | *BlackHole 2ch* |
 | `ffmpeg` | macOS | same, through `ffmpeg -f audiotoolbox` | *BlackHole 2ch* |
@@ -112,35 +97,39 @@ it costs a few milliseconds of latency and nothing else.
 
 ## Use
 
-On Windows, double-click **`anymic.bat`**; on macOS, double-click
-**`anymic.command`**. Both check that Python and a virtual audio cable are
+On Windows, double-click **`unimic.bat`**; on macOS, double-click
+**`unimic.command`**. Both check that Python and a virtual audio cable are
 present, offer to install whichever is missing, and then start the server.
-Arguments pass straight through, so `anymic.bat --port 9000` and
-`./anymic.command --port 9000` work too.
+Arguments pass straight through, so `unimic.bat --port 9000` and
+`./unimic.command --port 9000` work too.
 
 Everywhere else, and on Windows or macOS once things are set up:
 
 ```bash
-python3 anymic.py
+python3 unimic.py
 ```
 
 It prints a URL like `https://192.168.1.190:8443/`. Open that on the phone, tap
 through the certificate warning, tap **Start microphone**.
 
-Then pick the microphone it names — **AnyMic (Phone)** on Linux, **CABLE
+The page then shows a level meter, a mic volume slider, and live stats — buffer
+depth, bytes sent, dropout count and link state — so you can tell at a glance
+whether audio is actually flowing rather than guessing.
+
+Then pick the microphone it names — **UniMic (Phone)** on Linux, **CABLE
 Output** on Windows, **BlackHole 2ch** on macOS — as the input in whatever app
-you're using. AnyMic prints the exact name to select at startup.
+you're using. UniMic prints the exact name to select at startup.
 
 Ctrl-C shuts the audio path down cleanly. On Linux that also removes the
 virtual source; on Windows and macOS the cable is yours and stays installed.
 
 ### Choosing a cable
 
-If you have more than one virtual cable, or AnyMic picks the wrong one:
+If you have more than one virtual cable, or UniMic picks the wrong one:
 
 ```bash
-python3 anymic.py --list-devices     # what is available
-python3 anymic.py --device "CABLE"   # part of the name is enough
+python3 unimic.py --list-devices     # what is available
+python3 unimic.py --device "CABLE"   # part of the name is enough
 ```
 
 `--device default` plays out of your speakers instead. That is not a
@@ -150,13 +139,13 @@ phone half is working before installing a driver.
 ### Is this machine ready?
 
 ```bash
-python3 anymic.py --check
+python3 unimic.py --check
 ```
 
 Reports what is present and what is missing, prints installation instructions
-for whatever is absent, and exits 0 only when AnyMic can actually run. It
+for whatever is absent, and exits 0 only when UniMic can actually run. It
 touches nothing — on Linux it looks for the tools without creating a sink, and
-elsewhere it only resolves the device. `anymic.bat` and `anymic.command` use it
+elsewhere it only resolves the device. `unimic.bat` and `unimic.command` use it
 rather than duplicating the detection.
 
 ### First run on Windows
@@ -206,7 +195,7 @@ second wait.
 ```
 --port 8443            listen port
 --description "..."    name shown in app mic lists (Linux only)
---name AnyMic          audio node name (Linux only)
+--name UniMic          audio node name (Linux only)
 --backend auto|pipewire|pulse|winmm|coreaudio|ffmpeg
 --device NAME          which virtual cable to play into (Windows, macOS);
                        'default' plays to your speakers instead
@@ -215,7 +204,7 @@ second wait.
 --certdir ./certs      where the self-signed cert lives
 ```
 
-`--name` and `--description` only mean anything on Linux, where AnyMic creates
+`--name` and `--description` only mean anything on Linux, where UniMic creates
 the device. Elsewhere the cable already has a name and that is what apps show.
 
 ## Tests
@@ -229,7 +218,7 @@ python3 tests/test_wire.py    # real server, real WSS, real audio
 All three run on all three platforms.
 
 `test_wire.py` starts its own server on port 8446 under a separate device name,
-so it will not disturb an AnyMic you already have running. It streams a 440Hz
+so it will not disturb an UniMic you already have running. It streams a 440Hz
 tone through the whole stack and checks what comes out of the virtual
 microphone is still 440Hz and unbroken.
 
@@ -273,8 +262,8 @@ audio once latency exceeds 400ms.
 with silence rather than stalling. If it does, check the *Dropouts* counter on
 the phone: steadily climbing means packets aren't arriving in time.
 
-**No "AnyMic (Phone)" in the app's list** — some apps cache the device list at
-startup. Restart the app after starting AnyMic.
+**No "UniMic (Phone)" in the app's list** — some apps cache the device list at
+startup. Restart the app after starting UniMic.
 
 **Windows: the phone cannot load the page** — almost always the firewall.
 Windows asks once whether to let Python accept connections; if that prompt was
@@ -282,15 +271,15 @@ dismissed, the block is silent afterwards. Allow `python.exe` on private
 networks in Windows Defender Firewall.
 
 **Windows: "no virtual audio cable installed"** — install VB-CABLE and run
-`--list-devices` to confirm it shows up. It appears to AnyMic as *CABLE Input*
+`--list-devices` to confirm it shows up. It appears to UniMic as *CABLE Input*
 even though newer driver packs also register a 16-channel endpoint.
 
 **macOS: BlackHole is installed but not found** — the system extension has to
 be approved in *System Settings → Privacy & Security*, and macOS only picks it
-up after you log out and back in. `--list-devices` shows what AnyMic can see.
+up after you log out and back in. `--list-devices` shows what UniMic can see.
 
 **macOS: it falls back to ffmpeg** — the in-process CoreAudio path failed for
-some reason and AnyMic carried on through ffmpeg. Audio still works; the log
+some reason and UniMic carried on through ffmpeg. Audio still works; the log
 line above it says what went wrong. Force one or the other with
 `--backend coreaudio` or `--backend ffmpeg`.
 
@@ -302,14 +291,14 @@ indicator. See [Mic volume](#mic-volume).
 ### Linux (systemd)
 
 ```ini
-# ~/.config/systemd/user/anymic.service
+# ~/.config/systemd/user/unimic.service
 [Unit]
-Description=AnyMic phone microphone
+Description=UniMic phone microphone
 After=pipewire.service pipewire-pulse.service
 Wants=pipewire.service
 
 [Service]
-ExecStart=/usr/bin/python3 %h/anymic/anymic.py
+ExecStart=/usr/bin/python3 %h/unimic/unimic.py
 KillMode=mixed
 Restart=on-failure
 RestartSec=2
@@ -319,20 +308,20 @@ WantedBy=default.target
 ```
 
 ```bash
-systemctl --user enable --now anymic
-journalctl --user -u anymic -f      # the URL to open is printed here
+systemctl --user enable --now unimic
+journalctl --user -u unimic -f      # the URL to open is printed here
 ```
 
 `KillMode=mixed` matters. By default systemd signals every process in the
-cgroup, which kills the audio feed before AnyMic can shut it down in order and
+cgroup, which kills the audio feed before UniMic can shut it down in order and
 leaves a spurious error in the log. `mixed` signals only the main process and
 lets it tear its own children down.
 
 ### Windows (Task Scheduler)
 
 ```powershell
-schtasks /create /tn AnyMic /sc onlogon /rl highest ^
-  /tr "pythonw.exe C:\path\to\anymic\anymic.py"
+schtasks /create /tn UniMic /sc onlogon /rl highest ^
+  /tr "pythonw.exe C:\path\to\unimic\unimic.py"
 ```
 
 `pythonw.exe` rather than `python.exe` keeps a console window from appearing at
@@ -342,21 +331,21 @@ remember it, or redirect stdout to a file.
 ### macOS (launchd)
 
 ```xml
-<!-- ~/Library/LaunchAgents/com.local.anymic.plist -->
+<!-- ~/Library/LaunchAgents/com.local.unimic.plist -->
 <plist version="1.0"><dict>
-  <key>Label</key>            <string>com.local.anymic</string>
+  <key>Label</key>            <string>com.local.unimic</string>
   <key>ProgramArguments</key> <array>
     <string>/usr/bin/python3</string>
-    <string>/Users/you/anymic/anymic.py</string>
+    <string>/Users/you/unimic/unimic.py</string>
   </array>
   <key>RunAtLoad</key>        <true/>
   <key>KeepAlive</key>        <true/>
-  <key>StandardOutPath</key>  <string>/tmp/anymic.log</string>
+  <key>StandardOutPath</key>  <string>/tmp/unimic.log</string>
 </dict></plist>
 ```
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.local.anymic.plist
+launchctl load ~/Library/LaunchAgents/com.local.unimic.plist
 ```
 
 ## How the audio path works
@@ -367,7 +356,7 @@ Creating the virtual source is one `pactl` call:
 
 ```bash
 pactl load-module module-null-sink media.class=Audio/Source/Virtual \
-      sink_name=AnyMic channel_map=mono
+      sink_name=UniMic channel_map=mono
 ```
 
 Feeding it is the non-obvious part. WirePlumber's policy will not route a
@@ -377,9 +366,9 @@ instead, so your audio goes to the speakers and the virtual mic stays silent.
 The fix is to start `pw-cat` with autoconnect off and link it by hand:
 
 ```bash
-PIPEWIRE_PROPS='{ node.autoconnect=false node.name=anymic-feed }' \
+PIPEWIRE_PROPS='{ node.autoconnect=false node.name=unimic-feed }' \
   pw-cat --playback --format=s16 --rate=48000 --channels=1 --raw - &
-pw-link anymic-feed:output_MONO AnyMic:input_MONO
+pw-link unimic-feed:output_MONO UniMic:input_MONO
 ```
 
 The server does both, plus paces writes at exactly real time so the stream
@@ -395,11 +384,11 @@ is a no-op wherever `-d` already did the job.
 ### Windows and macOS
 
 There is nothing to create. The cable exists already, and its two ends are the
-same device seen from opposite sides: AnyMic opens the playback end and plays
+same device seen from opposite sides: UniMic opens the playback end and plays
 into it, apps open the capture end and record from it.
 
 Finding it is a name match — waveOut reports *CABLE Input*, CoreAudio reports
-*BlackHole 2ch* — and the name AnyMic tells you to select in your apps is the
+*BlackHole 2ch* — and the name UniMic tells you to select in your apps is the
 matching capture end, which is not always the same string. Windows truncates
 device names to 31 characters at this layer, which is why the matching is on a
 prefix.
