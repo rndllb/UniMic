@@ -200,10 +200,61 @@ so handing over to another phone doesn't mean waiting out the reservation.
 --list-devices         show what --device can pick from
 --check                report whether this machine is ready, exit 0 if so
 --certdir ./certs      where the self-signed cert lives
+--version              print the version and exit
+--update               install the newest release over this copy
+--no-update-check      never contact GitHub to look for a newer release
 ```
 
 `--name` and `--description` only mean anything on Linux, where UniMic creates
 the device. Elsewhere the cable already has a name and that's what apps show.
+
+## Releases and updating
+
+Releases live on [GitHub](https://github.com/rndllb/UniMic/releases). Each one
+is a tag and a zip of the source. Download it, unzip it anywhere, and run the
+launcher for your platform.
+
+Once installed, UniMic keeps itself current:
+
+```bash
+python3 unimic.py --version   # what you have
+python3 unimic.py --update    # fetch and install the newest release
+```
+
+Startup looks for a newer release at most once a day and prints a line if it
+finds one. That is all it does. Nothing is downloaded or replaced until you run
+`--update` yourself, because software that rewrites itself from the network
+without being asked turns one compromised account into everybody's problem. The
+check runs on a background thread, caches its answer for 24 hours, and stays
+quiet about every failure, so being offline costs nothing and delays nothing.
+`--no-update-check` stops it contacting GitHub at all.
+
+`--update` replaces only the six files a release owns: `unimic.py`,
+`unimic.bat`, `unimic.command`, `index.html`, `README.md` and `LICENSE`. Your
+certificates and their private key, an edited launcher, a systemd unit, or
+anything else you put in the directory are left alone. The version being
+replaced is kept in `.backup-<version>/`, so a bad update is one `cp` away from
+undone.
+
+The check lives in `unimic.py` rather than in the launchers because Python is
+the only runtime all three platforms are guaranteed to have. A `.bat` could
+only ever update Windows users, a `.command` only macOS ones, and Linux has no
+launcher at all.
+
+### Cutting a release
+
+GitHub builds the source zip for every tag, so there is nothing to package or
+upload:
+
+```bash
+# bump __version__ in unimic.py first, then commit
+gh release create v1.1.0 --title "UniMic 1.1.0" --notes "What changed"
+```
+
+The updater reads `tag_name` from the GitHub API and compares it against
+`__version__`, so the tag has to be a plain `vX.Y.Z`. It prefers an uploaded
+`.zip` asset if a release carries one, which leaves room to ship a trimmed
+archive later without changing any code.
 
 ## Tests
 
