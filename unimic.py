@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-UniMic — turn any phone into a microphone, over the browser.
+UniMic: turn any phone into a microphone, over the browser.
 
 No phone app. The phone's browser captures the mic and streams raw PCM over a
 WebSocket; this server feeds it into a virtual audio device that every app sees
@@ -11,8 +11,8 @@ as a normal microphone.
 Then open the printed https:// URL on the phone and tap Start.
 
 Linux creates the virtual microphone itself, through PipeWire or PulseAudio.
-Windows and macOS have no user-mode way to invent a capture device — that takes
-a driver — so there UniMic plays into a virtual audio cable you install once
+Windows and macOS have no user-mode way to invent a capture device, which takes
+a driver, so there UniMic plays into a virtual audio cable you install once
 (VB-CABLE or BlackHole) and apps record from the other end of it.
 """
 
@@ -75,7 +75,7 @@ class JitterBuffer:
     """Absorbs network jitter between the phone and the audio graph.
 
     Underruns yield silence rather than stalling the writer. A stalled writer
-    is what produces the classic chopped "robot voice" — the consumer keeps
+    is what produces the classic chopped "robot voice". The consumer keeps
     pulling at 48kHz whether or not anything arrived, so a gap becomes a hole
     in the waveform. Silence at least keeps the stream phase-correct.
     """
@@ -139,7 +139,7 @@ class FeedError(RuntimeError):
     """The audio path could not be set up.
 
     Carries an optional multi-line `hint` with what the user should do about
-    it — on Windows and macOS that is usually "install the virtual cable",
+    it, and on Windows and macOS that is usually "install the virtual cable",
     which deserves more than a one-line exception message.
     """
 
@@ -151,7 +151,7 @@ class FeedError(RuntimeError):
 class VirtualMic:
     """Base class: owns the jitter buffer, the pacing thread and teardown.
 
-    Subclasses supply the platform-specific pieces — arranging for something
+    Subclasses supply the platform-specific pieces: arranging for something
     the system believes is a microphone, and opening a sink we can write PCM
     into that feeds it. On Linux that device is created on the fly; on Windows
     and macOS it is a cable the user installed, which we only locate and open.
@@ -193,7 +193,7 @@ class VirtualMic:
 
     @property
     def source_name(self):
-        """The device id to record from — what the tests and tooling need."""
+        """The device id to record from, which is what the tests and tooling need."""
         return self.name
 
     @property
@@ -221,7 +221,7 @@ class VirtualMic:
             raise
         self._feeder = threading.Thread(target=self._feed_loop, daemon=True)
         self._feeder.start()
-        log(f"audio path ready — apps will see it as '{self.display_name}'")
+        log(f"audio path ready: apps will see it as '{self.display_name}'")
 
     def _feed_loop(self):
         """Write to the feed at exactly real time, gaps filled with silence."""
@@ -323,7 +323,7 @@ class PipeWireMic(PulseCtlMic):
     """A real virtual source, fed through pw-cat.
 
     WirePlumber's policy will not route a playback stream onto a node whose
-    media.class is Audio/Source/Virtual — it classes the node as a source and
+    media.class is Audio/Source/Virtual. It classes the node as a source and
     silently connects the stream to the default sink instead, so the audio goes
     to the speakers while the microphone stays dead. pw-cat therefore runs with
     autoconnect disabled and gets linked into place by hand.
@@ -430,7 +430,7 @@ class PulseMic(PulseCtlMic):
         # -d is the documented way to pick a sink and is honoured by a real
         # PulseAudio daemon. Under PipeWire's PulseAudio compatibility layer
         # it is silently overridden and the stream lands on the default sink
-        # — i.e. the speakers — so move it into place explicitly afterwards.
+        # (i.e. the speakers), so move it into place explicitly afterwards.
         # The move is idempotent, so this is harmless where -d already worked.
         if not self._attach(stream):
             raise FeedError("could not attach the feed to the null sink")
@@ -459,8 +459,8 @@ class PulseMic(PulseCtlMic):
 # Windows: play into a virtual audio cable with waveOut
 # --------------------------------------------------------------------------
 
-# Windows has no user-mode way to create a capture endpoint — that needs a
-# driver — so the cable has to be installed once, by hand. These are the
+# Windows has no user-mode way to create a capture endpoint, which needs
+# a driver, so the cable has to be installed once, by hand. These are the
 # playback halves of the free ones, keyed by what waveOut reports. waveOut
 # truncates device names to 31 characters, so match on a prefix.
 #
@@ -496,7 +496,7 @@ To try UniMic without installing anything, run it with
     --device default
 
 which plays the phone's audio out of your speakers instead. That is useful
-for checking the phone half works, but it is not a microphone — no app will
+for checking the phone half works, but it is not a microphone. No app will
 be able to record from it."""
 
 
@@ -504,7 +504,7 @@ class WinMMMic(VirtualMic):
     """Feeds a virtual audio cable's playback end through the waveOut API.
 
     waveOut is the oldest of the three Windows audio APIs and the only one
-    reachable from ctypes without a pile of COM boilerplate — WASAPI would mean
+    reachable from ctypes without a pile of COM boilerplate. WASAPI would mean
     hand-rolling IMMDeviceEnumerator vtables. Windows maps waveOut onto WASAPI
     shared mode internally, so the cost is a few extra milliseconds of latency
     and nothing else. At 48kHz mono that is a fair trade for staying inside the
@@ -640,7 +640,7 @@ class WinMMMic(VirtualMic):
             self._dev_id = self._mm["ctypes"].c_size_t(-1).value
             self._dev_name = "default output device"
             self._pick = None
-            log("playing to the default output device — this is NOT a "
+            log("playing to the default output device. This is NOT a "
                 "microphone, nothing can record from it")
             return
 
@@ -663,7 +663,7 @@ class WinMMMic(VirtualMic):
                 if nm.startswith(pre):
                     self._dev_id, self._dev_name = i, nm
                     self._pick, self._product = pick, prod
-                    log(f"found {prod} — feeding '{nm}'")
+                    log(f"found {prod}, feeding '{nm}'")
                     return
 
         raise FeedError("no virtual audio cable installed", CABLE_HELP_WINDOWS)
@@ -742,8 +742,8 @@ class WinMMMic(VirtualMic):
 
     def ready_lines(self):
         if not self._pick:
-            return ["   Playing to your speakers. This is not a microphone —",
-                    "   install a virtual cable to make it one."]
+            return ["   Playing to your speakers. This is not a microphone.",
+                    "   Install a virtual cable to make it one."]
         return [f"   Select '{self._pick}' as the mic in your apps.",
                 f"   ({self._product} is carrying the audio; UniMic plays into",
                 f"    '{self._dev_name}' and your apps record the other end.)"]
@@ -775,7 +775,7 @@ To try UniMic without installing anything, run it with
     --device default
 
 which plays the phone's audio out of your speakers instead. That is useful
-for checking the phone half works, but it is not a microphone — no app will
+for checking the phone half works, but it is not a microphone. No app will
 be able to record from it."""
 
 
@@ -785,7 +785,7 @@ class CoreAudioMic(VirtualMic):
     AudioQueue is the highest-level CoreAudio playback API and the only one
     that does not require building AudioUnit render callbacks by hand. We
     allocate a ring of buffers, enqueue them as audio arrives, and the queue's
-    completion callback hands them back — so, as on Windows, the sound card
+    completion callback hands them back, so as on Windows the sound card
     ends up pacing the feed rather than the system clock.
 
     kAudioQueueProperty_CurrentDevice is what pins the queue to BlackHole
@@ -921,7 +921,7 @@ class CoreAudioMic(VirtualMic):
 
         out = []
         for dev in ids:
-            # Skip anything with no output streams — input-only devices cannot
+            # Skip anything with no output streams. Input-only devices cannot
             # be played into. ('slay' really is the selector for
             # kAudioDevicePropertyStreamConfiguration.)
             cfg = m["Addr"](cls._fourcc("slay"), cls._fourcc("outp"), 0)
@@ -963,7 +963,7 @@ class CoreAudioMic(VirtualMic):
 
         if self.device and self.device.lower() == "default":
             self._uid, self._dev_name = None, "default output device"
-            log("playing to the default output device — this is NOT a "
+            log("playing to the default output device. This is NOT a "
                 "microphone, nothing can record from it")
             return
 
@@ -1077,8 +1077,8 @@ class CoreAudioMic(VirtualMic):
 
     def ready_lines(self):
         if not getattr(self, "_uid", None):
-            return ["   Playing to your speakers. This is not a microphone —",
-                    "   install BlackHole to make it one."]
+            return ["   Playing to your speakers. This is not a microphone.",
+                    "   Install BlackHole to make it one."]
         return [f"   Select '{self._dev_name}' as the mic in your apps.",
                 "   (UniMic plays into it; apps record the same device.)"]
 
@@ -1086,7 +1086,7 @@ class CoreAudioMic(VirtualMic):
 class FFmpegMic(SubprocessFeedMic):
     """macOS fallback: let ffmpeg do the CoreAudio talking.
 
-    Used when the ctypes AudioQueue path cannot start — a macOS release that
+    Used when the ctypes AudioQueue path cannot start: a macOS release that
     moved a symbol, a Python built against an odd runtime, anything of that
     shape. ffmpeg's audiotoolbox output does the same job, at the cost of a
     Homebrew install.
@@ -1186,7 +1186,7 @@ def choose_backend(preference="auto"):
     if shutil.which("pw-cat") and shutil.which("pw-link"):
         return PipeWireMic
     if shutil.which("pacat"):
-        log("pw-cat/pw-link not found — falling back to the PulseAudio backend")
+        log("pw-cat/pw-link not found, falling back to the PulseAudio backend")
         return PulseMic
     sys.exit("no supported audio backend: install PipeWire (pw-cat, pw-link) "
              "or PulseAudio (pacat)")
@@ -1237,7 +1237,7 @@ def ws_recv(sock):
     if payload is None:
         return None
     if mask and length:
-        # Bulk XOR via one big-int operation — a per-byte Python loop here
+        # Bulk XOR via one big-int operation. A per-byte Python loop here
         # costs real CPU at 50 frames/sec.
         key = (mask * (length // 4 + 1))[:length]
         payload = (int.from_bytes(payload, "big") ^
@@ -1269,7 +1269,7 @@ CLOSE_RESERVED = 4002
 class MicLock:
     """Grants the microphone to one device at a time, first come first served.
 
-    Anyone can load the page — it is only the audio stream that is exclusive.
+    Anyone can load the page; only the audio stream is exclusive.
     The holder gets a secret token and is the only one who can reclaim the
     stream after a drop.
 
@@ -1303,7 +1303,7 @@ class MicLock:
 
             if self._connected:
                 # Same device reconnecting before we noticed the old socket
-                # died — let it back in rather than locking out the owner.
+                # died. Let it back in rather than locking out the owner.
                 if token and secrets.compare_digest(token, self._token):
                     self.holder = peer
                     return True, self._token, None
@@ -1371,8 +1371,8 @@ class Handler(BaseHTTPRequestHandler):
 
         WebSockets are exempt from the same-origin policy, so once a browser
         has accepted our self-signed certificate, any page it later visits can
-        open a socket to us. It could not hear anything — it would have to send
-        audio, not receive it — but it could seize the lock and shut the owner
+        open a socket to us. It could not hear anything, since it would have to
+        send audio rather than receive it, but it could seize the lock and shut the owner
         out of their own microphone.
 
         Browsers always set Origin on a WebSocket handshake, so checking it
@@ -1416,7 +1416,7 @@ class Handler(BaseHTTPRequestHandler):
         if not granted:
             # Upgrade first, refuse second. An HTTP error during the handshake
             # is invisible to the browser's WebSocket API, but a close code is
-            # not — so the page can explain itself instead of retry-looping.
+            # not, so the page can explain itself instead of retry-looping.
             log(f"refused {peer}: microphone {refusal} by {lock.holder}")
             try:
                 ws_send(sock, json.dumps({"type": "denied", "reason": refusal}).encode())
@@ -1457,7 +1457,7 @@ class Handler(BaseHTTPRequestHandler):
                 if frame is None:
                     break
                 opcode, payload = frame
-                if opcode == 0x2:            # binary — PCM
+                if opcode == 0x2:            # binary (PCM)
                     mic.buffer.push(payload)
                 elif opcode == 0x8:          # close
                     # 1000 means the user pressed Stop. Anything else is a drop,
@@ -1474,7 +1474,7 @@ class Handler(BaseHTTPRequestHandler):
             mic.buffer.reset()
             lock.release(token, deliberate)
             log(f"phone disconnected ({peer})"
-                + ("" if deliberate else f" — reserved for {int(MicLock.RESERVE_SECONDS)}s"))
+                + ("" if deliberate else f", reserved for {int(MicLock.RESERVE_SECONDS)}s"))
 
 
 class Server(ThreadingHTTPServer):
@@ -1483,7 +1483,7 @@ class Server(ThreadingHTTPServer):
 
 
 # --------------------------------------------------------------------------
-# TLS — getUserMedia only works in a secure context
+# TLS: getUserMedia only works in a secure context
 # --------------------------------------------------------------------------
 
 # ---- DER, just enough of it to write one certificate ---------------------
@@ -1678,7 +1678,7 @@ def ensure_cert(certdir, ip):
                     return cert, keyf
         except OSError:
             pass
-        log("LAN address changed — regenerating certificate")
+        log("LAN address changed, regenerating certificate")
 
     log("generating self-signed certificate...")
     if shutil.which("openssl"):
@@ -1689,7 +1689,7 @@ def ensure_cert(certdir, ip):
             "-addext", f"subjectAltName=IP:{ip},IP:127.0.0.1,DNS:localhost",
         ], capture_output=True, text=True)
         if r.returncode != 0:
-            log("openssl could not generate it — using the built-in generator")
+            log("openssl could not generate it, using the built-in generator")
             log(r.stderr.strip().splitlines()[-1] if r.stderr.strip() else "")
             _write_builtin_cert(cert, keyf, ip)
     else:
@@ -1716,7 +1716,7 @@ def lan_ip():
         s.connect(("8.8.8.8", 80))   # no packets sent; just picks the route
         return s.getsockname()[0]
     except OSError:
-        # No default route — an isolated LAN, or the phone's hotspot before it
+        # No default route: an isolated LAN, or the phone's hotspot before it
         # has internet. Fall back to whatever the hostname resolves to.
         try:
             for info in socket.getaddrinfo(socket.gethostname(), None,
@@ -1754,7 +1754,7 @@ def list_devices():
 def check_setup(device=None):
     """Report whether this machine can run UniMic. Exit status 0 means yes.
 
-    Written for unimic.bat to call, but useful on its own — it answers "why is
+    Written for unimic.bat to call, but useful on its own, since it answers "why is
     there no microphone" without starting a server or touching the audio graph.
     """
     global QUIET
@@ -1772,13 +1772,13 @@ def check_setup(device=None):
         if shutil.which("pw-cat") and shutil.which("pw-link"):
             print("  [ok]  PipeWire (pw-cat, pw-link)")
         elif shutil.which("pacat"):
-            print("  [ok]  PulseAudio (pacat) — PipeWire not found, will fall back")
+            print("  [ok]  PulseAudio (pacat): PipeWire not found, will fall back")
         else:
             print("  [--]  neither PipeWire (pw-cat, pw-link) nor PulseAudio (pacat)")
             ready = False
     else:
-        # Resolving the device has no side effects on these platforms — the
-        # cable exists or it does not — so this is safe to run at any time.
+        # Resolving the device has no side effects on these platforms. The
+        # cable either exists or it does not, so this is safe to run here.
         attempts = [WinMMMic] if WINDOWS else [CoreAudioMic, FFmpegMic]
         for cls in attempts:
             probe = cls(device=device)
@@ -1809,11 +1809,12 @@ def check_setup(device=None):
 
 
 def main():
-    # These messages contain em-dashes. A Windows console, or any redirected
-    # pipe, commonly defaults to a legacy code page that cannot encode them —
-    # which would take the server down on its very first log line, in exactly
-    # the unattended setups where the output matters most. UTF-8 with
-    # replacement is readable everywhere and fatal nowhere.
+    # --name and --description reach the log verbatim, so any character the
+    # user can type can end up on stdout. A Windows console, or any
+    # redirected pipe, commonly defaults to a legacy code page that cannot
+    # encode much, and the failure takes the server down on its first log
+    # line, in exactly the unattended setups where the output matters most.
+    # UTF-8 with replacement is readable everywhere and fatal nowhere.
     for stream in (sys.stdout, sys.stderr):
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")
@@ -1821,7 +1822,7 @@ def main():
             pass
 
     ap = argparse.ArgumentParser(
-        prog="unimic", description="UniMic — turn any phone into a microphone.")
+        prog="unimic", description="UniMic: turn any phone into a microphone.")
     ap.add_argument("--port", type=int, default=8443)
     ap.add_argument("--name", default="UniMic",
                     help="audio node name (Linux only)")
@@ -1867,14 +1868,14 @@ def main():
     ctx.load_cert_chain(cert, keyf)
 
     # Claim the port before touching audio. A second instance must fail without
-    # disturbing the virtual source the first one is already feeding — taking
+    # disturbing the virtual source the first one is already feeding. Taking
     # the audio down and only then discovering the port is busy would break a
     # working microphone out from under whoever is using it.
     try:
         httpd = Server(("0.0.0.0", args.port), Handler)
     except OSError as e:
         if e.errno == errno.EADDRINUSE:
-            sys.exit(f"port {args.port} is already in use — UniMic may "
+            sys.exit(f"port {args.port} is already in use. UniMic may "
                      f"already be running. Use --port to pick another.")
         raise
     httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
@@ -1898,12 +1899,12 @@ def main():
         print(line)
     if WINDOWS:
         print("   If the phone cannot reach the page, allow Python through")
-        print("   the firewall on your private network — Windows asks the")
+        print("   the firewall on your private network. Windows asks the")
         print("   first time, and denying it is silent afterwards.")
     print("   Ctrl-C to stop.")
     print()
     # Block-buffered whenever stdout isn't a terminal (a log file, systemd's
-    # journal). Without this the URL — the one thing you need — sits in the
+    # journal). Without this the URL, the one thing you need, sits in the
     # buffer until exit.
     sys.stdout.flush()
 
@@ -1934,7 +1935,7 @@ def start_mic(backend, args):
     """Bring the audio path up, explaining itself if it cannot.
 
     On macOS a failure of the in-process CoreAudio path is worth retrying
-    through ffmpeg before giving up — the cable is installed either way, and
+    through ffmpeg before giving up, since the cable is installed either way and
     only the route to it differs.
     """
     attempts = [backend]
@@ -1950,7 +1951,7 @@ def start_mic(backend, args):
         except Exception as e:                       # noqa: BLE001
             last = e
             if i + 1 < len(attempts):
-                log(f"{cls.BACKEND} backend failed ({e}) — trying "
+                log(f"{cls.BACKEND} backend failed ({e}), trying "
                     f"{attempts[i + 1].BACKEND}")
 
     print(f"\nunimic: {last}", file=sys.stderr)

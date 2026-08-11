@@ -232,7 +232,7 @@ function fmtKB(kb) {
 function applyGain(pct, persist) {
   $('volval').textContent = pct + '%';
   if (gain && ctx) {
-    // Short ramp — jumping gain.value outright produces an audible click.
+    // Short ramp, since jumping gain.value outright produces an audible click.
     gain.gain.setTargetAtTime(pct / 100, ctx.currentTime, 0.015);
   }
   if (persist) { try { localStorage.setItem('unimic.gain', pct); } catch (_) {} }
