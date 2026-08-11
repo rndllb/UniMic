@@ -71,8 +71,9 @@ rather than a proprietary one that only its own client can talk to.
   administrator. VoiceMeeter and Virtual Audio Cable work too if you already
   have one.
 - **macOS** — [BlackHole](https://existential.audio/blackhole/), via
-  `brew install blackhole-2ch` or the installer. You will need to allow the
-  system extension in *System Settings → Privacy & Security*.
+  `brew install blackhole-2ch` or the installer, or let `anymic.command` do it.
+  You will need to allow the system extension in *System Settings → Privacy &
+  Security*, and log out and back in before it appears.
 
 `openssl` is used when it is present but is no longer required; without it
 AnyMic generates its own certificate.
@@ -111,12 +112,13 @@ it costs a few milliseconds of latency and nothing else.
 
 ## Use
 
-On Windows, double-click **`anymic.bat`**. It checks that Python and a virtual
-audio cable are both present, offers to install whichever is missing, and then
-starts the server. Arguments pass straight through, so `anymic.bat --port 9000`
-works too.
+On Windows, double-click **`anymic.bat`**; on macOS, double-click
+**`anymic.command`**. Both check that Python and a virtual audio cable are
+present, offer to install whichever is missing, and then start the server.
+Arguments pass straight through, so `anymic.bat --port 9000` and
+`./anymic.command --port 9000` work too.
 
-Everywhere else, and on Windows once things are set up:
+Everywhere else, and on Windows or macOS once things are set up:
 
 ```bash
 python3 anymic.py
@@ -154,8 +156,8 @@ python3 anymic.py --check
 Reports what is present and what is missing, prints installation instructions
 for whatever is absent, and exits 0 only when AnyMic can actually run. It
 touches nothing — on Linux it looks for the tools without creating a sink, and
-elsewhere it only resolves the device. `anymic.bat` uses it rather than
-duplicating the detection.
+elsewhere it only resolves the device. `anymic.bat` and `anymic.command` use it
+rather than duplicating the detection.
 
 ### First run on Windows
 

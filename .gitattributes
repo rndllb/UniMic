@@ -3,6 +3,10 @@
 # Windows line endings no matter what core.autocrlf says locally.
 *.bat text eol=crlf
 
+# The macOS launcher has the opposite requirement: Terminal runs it through a
+# shell, and a CR at the end of every line becomes part of the command.
+*.command text eol=lf
+
 *.py   text eol=lf
 *.md   text eol=lf
 *.html text eol=lf
