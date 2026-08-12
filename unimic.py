@@ -1826,7 +1826,7 @@ def check_setup(device=None):
 #  turns one compromised account into every user's problem, and a mic that
 #  swaps its own source out mid-call is its own kind of bad.
 
-__version__ = "1.0.2"
+__version__ = "1.0.1"
 REPO = "rndllb/UniMic"
 LATEST_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 
