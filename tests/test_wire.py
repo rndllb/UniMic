@@ -301,7 +301,7 @@ class FFmpegRecorder:
 class WinRecorder:
     """Windows: waveIn, the mirror image of the waveOut the server plays into.
 
-    Same reasoning as the server side — it is the one capture API reachable
+    Same reasoning as the server side: it is the one capture API reachable
     from ctypes without COM, and it keeps the test suite dependency-free.
     """
 
@@ -417,7 +417,7 @@ def drain_check(backend_cls, device):
     Runs the backend in-process for four seconds and counts the chunks that
     made it all the way out. A device that is not really draining shows up
     either as a write that blocks until it times out, or as a chunk count that
-    falls short of the elapsed time — both of which this catches without
+    falls short of the elapsed time. This catches both without
     needing anything to record from.
     """
     mic = backend_cls(NAME + "Drain", "UniMic Drain Test", device=device)
@@ -522,7 +522,7 @@ def main():
         if device:
             print(f"using virtual cable: {device}")
         else:
-            print("no virtual cable found — testing against the default output; "
+            print("no virtual cable found, testing against the default output; "
                   "the audio round-trip will be skipped")
 
     print("--- the audio path itself ---")
@@ -610,14 +610,14 @@ def main():
                               capture_output=True, text=True).stdout
         check("virtual source is removed on shutdown", f"sink_name={NAME}" not in left)
     else:
-        # Nothing to unload — the cable outlives us — but the server must still
+        # Nothing to unload, since the cable outlives us, but the server must
         # have let go of the device, which a clean exit code demonstrates.
         check("server shut down cleanly", proc.returncode in (0, None),
               f"exit {proc.returncode}")
 
     print()
     if failures:
-        print(f"FAILED: {len(failures)} — " + "; ".join(failures))
+        print(f"FAILED: {len(failures)}: " + "; ".join(failures))
         return 1
     print("all wire tests pass")
     return 0

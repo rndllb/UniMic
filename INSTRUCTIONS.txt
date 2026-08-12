@@ -1,0 +1,278 @@
+==============================================================================
+ UniMic - Step by step setup
+==============================================================================
+
+ UniMic turns your phone into a microphone for your computer.
+ There is no app to install on the phone. You just open a web page on it.
+
+ Find the section for your computer below and follow it in order.
+ Each one takes about five minutes the first time.
+
+
+==============================================================================
+ WINDOWS
+==============================================================================
+
+ STEP 1. Unzip the download
+ --------------------------
+   Right-click the UniMic zip file and choose "Extract All...".
+   Pick somewhere easy to find, like your Desktop.
+   Open the folder it creates.
+
+ STEP 2. Start it
+ ----------------
+   Double-click:   unimic.bat
+
+   A black window opens and checks two things:
+
+     - Python. If you do not have it, it offers to install it. Say yes.
+     - A virtual audio cable. If you do not have one, it offers to install
+       VB-CABLE. Say yes, and approve the Windows admin prompt that appears.
+
+   If it installs either one, close the window and double-click unimic.bat
+   again when it finishes.
+
+ STEP 3. Allow it through the firewall
+ -------------------------------------
+   The first time, Windows asks whether to let Python accept connections.
+   Tick "Private networks" and click Allow.
+
+   This prompt only appears once. If you click Cancel by mistake, your phone
+   will not be able to load the page and nothing will tell you why. See
+   FIXING THINGS at the bottom.
+
+ STEP 4. Open the address on your phone
+ --------------------------------------
+   The window shows something like:
+
+       Open this on your phone:   https://192.168.1.190:8443/
+
+   Type that into your phone's browser. Both devices must be on the same
+   Wi-Fi network.
+
+ STEP 5. Get past the certificate warning
+ ----------------------------------------
+   Your phone will warn that the connection is not private. This is normal
+   and it is explained at the end of this file.
+
+   Tap "Advanced", then "Proceed".
+
+ STEP 6. Start the microphone
+ ----------------------------
+   Tap the big "Start microphone" button, and allow microphone access when
+   the browser asks.
+
+ STEP 7. Choose it in your app
+ -----------------------------
+   In Discord, Zoom, OBS or whatever you are using, open the audio settings
+   and pick this as the input device:
+
+       CABLE Output
+
+   Done. Talk into your phone.
+
+
+==============================================================================
+ macOS
+==============================================================================
+
+ STEP 1. Unzip the download
+ --------------------------
+   Double-click the UniMic zip file. A folder appears next to it.
+   Open that folder.
+
+ STEP 2. Start it
+ ----------------
+   Double-click:   unimic.command
+
+   >>> THE FIRST TIME, MACOS WILL PROBABLY REFUSE TO OPEN IT. <<<
+   >>> THIS IS NORMAL. STEP 3 FIXES IT PERMANENTLY.           <<<
+
+   You will see a message saying the file is from an unidentified developer,
+   or that it was blocked to protect your Mac.
+
+ STEP 3. Allow it to run (first time only)
+ -----------------------------------------
+   You must try to open it once before macOS will offer you the button, so
+   do not skip Step 2.
+
+   1. Open System Settings (the grey gear icon).
+   2. Click "Privacy & Security" in the left sidebar.
+   3. Scroll all the way down to the "Security" section.
+   4. You will see a line about unimic.command being blocked, with an
+      "Open Anyway" button next to it. Click it.
+   5. Enter your password or use Touch ID if asked.
+   6. Double-click unimic.command again. Click "Open" on the confirmation.
+
+   It will now open normally every time from here on.
+
+   If you cannot find the button, there are two other ways:
+
+     - Control-click (or right-click) unimic.command, choose "Open" from
+       the menu, then click "Open" in the box that appears.
+
+     - Or skip the launcher completely. Open the Terminal app, type
+       "cd " (with the space), drag the UniMic folder onto the Terminal
+       window, press Return, then type this and press Return:
+
+           python3 unimic.py
+
+       This always works and macOS never blocks it.
+
+ STEP 4. Let it set itself up
+ ----------------------------
+   The window checks two things:
+
+     - Python. If you do not have it, it offers to install it. Say yes.
+     - BlackHole, a free audio driver that lets apps hear the phone. If you
+       do not have it, it offers to install it. Say yes and enter your
+       password when asked.
+
+   If it installs BlackHole, restart your Mac, or log out and back in.
+   macOS will not see the new audio device until you do. Then double-click
+   unimic.command again.
+
+ STEP 5. Open the address on your phone
+ --------------------------------------
+   The window shows something like:
+
+       Open this on your phone:   https://192.168.1.190:8443/
+
+   Type that into your phone's browser. Both devices must be on the same
+   Wi-Fi network.
+
+ STEP 6. Get past the certificate warning
+ ----------------------------------------
+   Your phone will warn that the connection is not private. This is normal
+   and it is explained at the end of this file.
+
+   Tap "Advanced", then "Proceed".
+
+ STEP 7. Start the microphone
+ ----------------------------
+   Tap the big "Start microphone" button, and allow microphone access when
+   the browser asks.
+
+ STEP 8. Choose it in your app
+ -----------------------------
+   In Zoom, Discord, QuickTime or whatever you are using, open the audio
+   settings and pick this as the input device:
+
+       BlackHole 2ch
+
+   Done. Talk into your phone.
+
+
+==============================================================================
+ LINUX
+==============================================================================
+
+ There is nothing to install. UniMic creates the microphone itself.
+
+ STEP 1. Unzip the download
+ --------------------------
+   Unzip it wherever you like, then open a terminal in that folder.
+
+ STEP 2. Start it
+ ----------------
+       python3 unimic.py
+
+   If it complains that pactl is missing, install your distribution's
+   PulseAudio utilities package. On Debian and Ubuntu:
+
+       sudo apt install pulseaudio-utils
+
+ STEP 3. Open the address on your phone
+ --------------------------------------
+   It prints something like:
+
+       Open this on your phone:   https://192.168.1.190:8443/
+
+   Type that into your phone's browser. Both devices must be on the same
+   network.
+
+ STEP 4. Get past the certificate warning
+ ----------------------------------------
+   Tap "Advanced", then "Proceed".
+
+ STEP 5. Start the microphone
+ ----------------------------
+   Tap "Start microphone" and allow microphone access.
+
+ STEP 6. Choose it in your app
+ -----------------------------
+   Pick this as the input device:
+
+       UniMic (Phone)
+
+   Done. Talk into your phone.
+
+
+==============================================================================
+ WHY DOES MY PHONE SAY THE CONNECTION IS NOT PRIVATE?
+==============================================================================
+
+ Browsers refuse to hand over the microphone unless the page is served over
+ HTTPS. HTTPS needs a certificate, and certificates are normally issued for
+ real domain names on the internet. Your computer at home does not have one,
+ so UniMic makes its own.
+
+ Your phone has no way to check a home-made certificate, so it warns you.
+ That warning is your phone doing its job.
+
+ It is safe to tap through here, and it is worth knowing why: the warning
+ means "I cannot prove who this is", not "this is broken". You are typing
+ your own computer's address, on your own network. Tapping Proceed once tells
+ the phone to remember it.
+
+ The encryption itself is real either way. Without it, anyone else on your
+ Wi-Fi could listen to your microphone.
+
+
+==============================================================================
+ FIXING THINGS
+==============================================================================
+
+ Is my computer even ready?
+   Run this. It checks everything and tells you what is missing:
+
+       python3 unimic.py --check
+
+ The phone cannot load the page
+   Both devices must be on the same Wi-Fi. Phones on mobile data cannot
+   reach your computer.
+
+   On Windows this is almost always the firewall. Open Windows Defender
+   Firewall, find Python in the list of allowed apps, and tick the
+   "Private" box.
+
+ Audio stops when the phone screen turns off
+   Leave "Keep screen awake" switched on in the page.
+
+ The app does not list the microphone
+   Some apps only look for microphones when they start. Close the app
+   completely and open it again with UniMic already running.
+
+ It sounds quiet, or crackly
+   Use the "Mic volume" slider on the phone page. If the meter turns amber
+   and shows CLIP, it is too loud. Slide it back down.
+
+ Choppy or robotic audio
+   Wi-Fi trouble. Move closer to the router, or turn on your phone's
+   hotspot and connect the computer to that instead.
+
+ Stopping it
+   Press Ctrl and C together in the UniMic window.
+
+
+==============================================================================
+ UPDATING
+==============================================================================
+
+     python3 unimic.py --version    shows what you have
+     python3 unimic.py --update     installs the newest version
+
+ UniMic tells you when a new version exists. It never installs anything on
+ its own. Your settings and certificates are not touched by an update.
+
+ Full documentation is in README.md.

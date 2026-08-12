@@ -7,6 +7,12 @@
 # shell, and a CR at the end of every line becomes part of the command.
 *.command text eol=lf
 
+# INSTRUCTIONS.txt exists to be double-clicked by someone who has just
+# unzipped this, and on Windows that means Notepad. Notepad has coped with LF
+# since Windows 10 1809, but CRLF costs nothing on the other two platforms and
+# this is the one file whose whole job is working for a novice first time.
+*.txt  text eol=crlf
+
 *.py   text eol=lf
 *.md   text eol=lf
 *.html text eol=lf

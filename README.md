@@ -2,6 +2,10 @@
 
 Turn any phone into a microphone, on Linux, Windows or macOS. No phone app.
 
+If you just want it working, read [INSTRUCTIONS.txt](INSTRUCTIONS.txt) instead.
+It's a plain step-by-step walkthrough for each platform. The rest of this file
+is how it works and why.
+
 The phone's browser captures the mic and streams raw PCM over a WebSocket. A
 small Python server feeds that into a virtual audio device, so any app (Discord,
 OBS, Zoom, browsers) sees an ordinary microphone.
@@ -146,6 +150,37 @@ nothing: on Linux it looks for the tools without creating a sink, and elsewhere
 it only resolves the device. Both launchers call it instead of duplicating the
 detection.
 
+### First run on macOS
+
+The first double-click of `unimic.command` will be refused, with a message about
+an unidentified developer or about the file being blocked to protect your Mac.
+Nothing is wrong. Anything extracted from a zip you downloaded in a browser
+carries a `com.apple.quarantine` flag, and Gatekeeper will not run a quarantined
+script that isn't signed by a paid Apple developer account.
+
+Clearing it is a one-time thing:
+
+1. Double-click `unimic.command` and let it get blocked. The button in step 3
+   does not appear until macOS has something to offer it for.
+2. Open **System Settings > Privacy & Security**.
+3. Scroll to the **Security** section. There's a line about `unimic.command`
+   being blocked, with an **Open Anyway** button. Click it, and authenticate.
+4. Double-click `unimic.command` again and confirm.
+
+It opens normally from then on. Two other routes if that button doesn't show up:
+
+- Control-click the file, choose **Open**, then **Open** again in the dialog.
+- Strip the flag directly: `xattr -d com.apple.quarantine unimic.command`
+
+Or sidestep it entirely by running `python3 unimic.py`. Quarantine only blocks
+executing the file itself, and this hands the script to Python as an argument
+instead, so Gatekeeper is never consulted. A quarantined `unimic.py` runs fine
+this way.
+
+The proper fix is signing and notarising the launcher with a paid Apple
+Developer account, which is the same thing BlackHole does and the reason its
+installer never prompts like this.
+
 ### First run on Windows
 
 Windows Firewall will ask whether to let Python accept connections. Allow it on
@@ -229,8 +264,8 @@ check runs on a background thread, caches its answer for 24 hours, and stays
 quiet about every failure, so being offline costs nothing and delays nothing.
 `--no-update-check` stops it contacting GitHub at all.
 
-`--update` replaces only the six files a release owns: `unimic.py`,
-`unimic.bat`, `unimic.command`, `index.html`, `README.md` and `LICENSE`. Your
+`--update` replaces only the files a release owns: `unimic.py`, `unimic.bat`,
+`unimic.command`, `index.html`, `README.md`, `INSTRUCTIONS.txt` and `LICENSE`. Your
 certificates and their private key, an edited launcher, a systemd unit, or
 anything else you put in the directory are left alone. The version being
 replaced is kept in `.backup-<version>/`, so a bad update is one `cp` away from

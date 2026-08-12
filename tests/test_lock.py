@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for MicLock — who owns the microphone, and when.
+"""Unit tests for MicLock: who owns the microphone, and when.
 
     python3 tests/test_lock.py
 """

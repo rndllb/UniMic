@@ -55,7 +55,7 @@ def handshake(cert, key, ip):
     threading.Thread(target=serve, daemon=True).start()
 
     # Trust nothing but this certificate, and hold it to the 127.0.0.1 SAN
-    # entry — exactly the check a browser makes, minus the trust store.
+    # entry, which is the check a browser makes minus the trust store.
     cctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     cctx.load_verify_locations(cert)
     cctx.check_hostname = True
@@ -143,7 +143,7 @@ def main():
 
     print()
     if failures:
-        print(f"FAILED: {len(failures)} — " + "; ".join(failures))
+        print(f"FAILED: {len(failures)}: " + "; ".join(failures))
         return 1
     print("all certificate tests pass")
     return 0

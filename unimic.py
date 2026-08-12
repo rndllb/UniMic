@@ -1826,7 +1826,7 @@ def check_setup(device=None):
 #  turns one compromised account into every user's problem, and a mic that
 #  swaps its own source out mid-call is its own kind of bad.
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 REPO = "rndllb/UniMic"
 LATEST_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 
@@ -1834,7 +1834,7 @@ LATEST_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 # it there (the certificates and their private key, an edited launcher, a
 # systemd unit) and an update must not touch any of it.
 PAYLOAD = ("unimic.py", "unimic.bat", "unimic.command",
-           "index.html", "README.md", "LICENSE")
+           "index.html", "README.md", "INSTRUCTIONS.txt", "LICENSE")
 
 UPDATE_CACHE = os.path.join(HERE, ".update-check")
 UPDATE_EVERY = 24 * 60 * 60
