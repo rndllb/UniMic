@@ -1763,7 +1763,7 @@ def check_setup(device=None):
     """
     global QUIET
     QUIET = True
-    print("UniMic setup check\n")
+    print(f"UniMic {__version__} setup check\n")
     print(f"  [ok]  Python {sys.version.split()[0]}")
     ready, hint = True, None
 
@@ -1826,7 +1826,7 @@ def check_setup(device=None):
 #  turns one compromised account into every user's problem, and a mic that
 #  swaps its own source out mid-call is its own kind of bad.
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 REPO = "rndllb/UniMic"
 LATEST_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 
@@ -1940,26 +1940,78 @@ def _cache_tag(tag):
         pass            # read-only install: it just checks again next time
 
 
-def update_notice():
-    """Print one line if a newer release exists, and otherwise say nothing.
+def newer_release():
+    """The tag of a newer release, or None. Never raises.
 
-    Runs on a background thread, so a slow network, a captive portal or no
-    route at all delays startup by nothing. Every failure here is silent by
-    design: an audio tool that refuses to start because GitHub is unreachable
-    would be a worse tool than one that never mentions updates.
+    Every failure here is silent by design. An audio tool that refuses to
+    start because GitHub is unreachable would be a worse tool than one that
+    never mentions updates.
     """
     tag = _cached_tag()
     if tag is None:
         try:
             found = fetch_latest()
         except Exception:                            # noqa: BLE001
-            return
+            return None
         tag = found[0] if found else ""
         _cache_tag(tag)
     have, want = parse_version(__version__), parse_version(tag)
-    if have and want and want > have:
+    return tag if (have and want and want > have) else None
+
+
+def update_notice():
+    """Mention a newer release. For when there is nobody available to ask.
+
+    Runs on a background thread, so a slow network, a captive portal or no
+    route at all delays startup by nothing.
+    """
+    tag = newer_release()
+    if tag:
         log(f"UniMic {tag} is available (this is {__version__}). "
             f"Install it with: python3 {os.path.basename(__file__)} --update")
+
+
+def offer_update():
+    """Ask about a newer release, at the moment when saying yes is easy.
+
+    Only where there is a terminal to ask at. Under systemd, launchd, or
+    pythonw with no console, nobody can answer, and a server blocking forever
+    on a prompt nobody can see is a far worse failure than one that never
+    mentions updates: those get the background notice instead.
+
+    A double-clicked unimic.command or unimic.bat does have a terminal, which
+    is the case this exists for. Asking there saves opening a second one.
+    """
+    if os.environ.get("UNIMIC_RELAUNCHED"):
+        return                       # already the new version, do not re-ask
+    try:
+        interactive = sys.stdin is not None and sys.stdin.isatty()
+    except (ValueError, OSError):
+        interactive = False
+    if not interactive:
+        threading.Thread(target=update_notice, daemon=True).start()
+        return
+
+    tag = newer_release()
+    if not tag:
+        return
+    print()
+    print(f"  UniMic {tag} is available. This is {__version__}.")
+    try:
+        answer = input("  Install it now? [Y/n] ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return
+    if answer in ("n", "no"):
+        print("  Skipped. Run with --update whenever you want it.")
+        return
+
+    print()
+    if do_update(relaunch=True) != 0:
+        # A failed update is not a reason not to run. The old version is
+        # still here and still works.
+        print("  Carrying on with the version you have.")
+        print()
 
 
 def _safe_extract(z, dest):
@@ -1989,7 +2041,35 @@ def _release_root(top):
     return None
 
 
-def do_update():
+def _rename_install_dir(tag):
+    """Rename UniMic-1.0.0 to UniMic-1.0.1 once the files inside are 1.0.1.
+
+    Only when the directory is still called exactly what the zip named it.
+    A directory somebody named themselves gets left alone, and so does one
+    that no longer matches, because a rename breaks every absolute path
+    pointing here: the systemd unit, the launchd plist and the scheduled task
+    in the README all name this directory, and silently moving it out from
+    under them would break autostart with nothing to explain why.
+
+    Returns where unimic.py now lives.
+    """
+    parent, name = os.path.split(HERE.rstrip(os.sep))
+    m = re.fullmatch(r"(UniMic|unimic)-v?" + re.escape(__version__), name)
+    if not m:
+        return HERE
+    new_dir = os.path.join(parent, f"{m.group(1)}-{tag.lstrip('vV')}")
+    if os.path.exists(new_dir):
+        return HERE
+    try:
+        os.rename(HERE, new_dir)
+    except OSError:
+        # Windows refuses to rename a directory while anything in it is open,
+        # and a Finder window counts. Not worth failing an update over.
+        return HERE
+    return new_dir
+
+
+def do_update(relaunch=False):
     """Fetch the newest release and install it over this copy."""
     print(f"UniMic {__version__}\n")
     try:
@@ -2062,8 +2142,30 @@ def do_update():
         print(f"  [ok] updated to {tag}")
         print(f"       replaced: {', '.join(done)}")
         print(f"       previous version kept in {os.path.basename(backup)}/")
+
+        where = _rename_install_dir(tag)
+        if where != HERE:
+            print(f"       folder renamed to {os.path.basename(where)}/")
+        script = os.path.join(where, os.path.basename(__file__))
         print()
+
+        if relaunch and os.path.exists(script):
+            print("  Restarting on the new version...")
+            print()
+            sys.stdout.flush()
+            # Hand the process over to the code just installed. The guard
+            # stops a version that somehow still thinks it is out of date
+            # from doing this forever.
+            os.environ["UNIMIC_RELAUNCHED"] = "1"
+            try:
+                os.execv(sys.executable, [sys.executable, script] + sys.argv[1:])
+            except OSError as e:
+                print(f"  [--] could not restart automatically ({e})")
+                print(f"       run: python3 {script}")
+                return 1
         print("  Restart UniMic to run the new version.")
+        if where != HERE:
+            print(f"  It now lives in {where}")
         return 0
     except Exception as e:                           # noqa: BLE001
         print(f"  [--] update failed: {e}")
@@ -2122,10 +2224,10 @@ def main():
     if args.update:
         return do_update()
 
-    # Daemon thread: it prints a line at most, and must never be the reason
-    # the server is slow to come up or fails to shut down.
+    # Before anything is opened or claimed, so that saying yes replaces a
+    # process that owns no port and no audio device.
     if not args.no_update_check:
-        threading.Thread(target=update_notice, daemon=True).start()
+        offer_update()
 
     if LINUX:
         # Linux builds the virtual source itself, so it needs the tools to do
@@ -2168,7 +2270,10 @@ def main():
     url = f"https://{ip}:{args.port}/"
     print()
     print("  " + "=" * 52)
-    print("   U N I M I C")
+    # Right-aligned to the box, so the version is somewhere predictable when
+    # someone is reading their own terminal back to you.
+    head = "   U N I M I C"
+    print(head + f"v{__version__}".rjust(54 - len(head)))
     print(f"   Open this on your phone:   {url}")
     print("  " + "=" * 52)
     print("   The certificate is self-signed, so the browser will warn.")

@@ -269,10 +269,24 @@
  UPDATING
 ==============================================================================
 
+ You do not need to do anything. When a new version comes out, UniMic asks
+ you the next time you start it:
+
+     UniMic v1.1.0 is available. This is 1.0.2.
+     Install it now? [Y/n]
+
+ Press Enter to say yes. It installs the new version and restarts itself.
+ Press n if you would rather not. It will ask again another day.
+
+ It never installs anything without asking first. Your certificates and
+ anything else you put in the folder are not touched.
+
+ The version you are running is shown in the box every time it starts, on
+ the same line as the UniMic name.
+
+ If you prefer to do it by hand:
+
      python3 unimic.py --version    shows what you have
      python3 unimic.py --update     installs the newest version
-
- UniMic tells you when a new version exists. It never installs anything on
- its own. Your settings and certificates are not touched by an update.
 
  Full documentation is in README.md.

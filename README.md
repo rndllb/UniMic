@@ -256,13 +256,35 @@ python3 unimic.py --version   # what you have
 python3 unimic.py --update    # fetch and install the newest release
 ```
 
-Startup looks for a newer release at most once a day and prints a line if it
-finds one. That is all it does. Nothing is downloaded or replaced until you run
-`--update` yourself, because software that rewrites itself from the network
-without being asked turns one compromised account into everybody's problem. The
-check runs on a background thread, caches its answer for 24 hours, and stays
-quiet about every failure, so being offline costs nothing and delays nothing.
-`--no-update-check` stops it contacting GitHub at all.
+Startup looks for a newer release at most once a day. If it finds one and
+you're at a terminal, it asks:
+
+```
+  UniMic v1.1.0 is available. This is 1.0.2.
+  Install it now? [Y/n]
+```
+
+Say yes and it installs and relaunches itself on the new version. Nothing is
+ever installed without that yes, because software that rewrites itself from the
+network unasked turns one compromised account into everybody's problem.
+
+The question only gets asked where there is somebody to answer it. Under
+systemd, launchd, or `pythonw` with no console, `stdin` isn't a terminal, and a
+server blocking forever on a prompt nobody can see is a far worse failure than
+one that never mentions updates. Those get a one-line notice on a background
+thread instead. Either way the answer is cached for 24 hours, every failure is
+silent, and being offline costs nothing: a machine with no route out starts in
+the same second as one with a fast connection. `--no-update-check` skips it
+entirely.
+
+The prompt comes before any port is bound or any audio device is opened, so
+saying yes replaces a process that owns nothing yet.
+
+If the directory is still named the way the zip named it (`UniMic-1.0.1`), an
+update renames it to match the new version. A directory you named yourself is
+left alone, and so is one that no longer matches, because the systemd unit, the
+launchd plist and the scheduled task below all name this directory by absolute
+path, and moving it silently would break autostart with nothing to explain why.
 
 `--update` replaces the top-level files the release contains, and nothing else.
 Directories are skipped, so `tests/` and your `certs/` are untouched, as is
