@@ -264,12 +264,17 @@ check runs on a background thread, caches its answer for 24 hours, and stays
 quiet about every failure, so being offline costs nothing and delays nothing.
 `--no-update-check` stops it contacting GitHub at all.
 
-`--update` replaces only the files a release owns: `unimic.py`, `unimic.bat`,
-`unimic.command`, `index.html`, `README.md`, `INSTRUCTIONS.txt` and `LICENSE`. Your
-certificates and their private key, an edited launcher, a systemd unit, or
-anything else you put in the directory are left alone. The version being
-replaced is kept in `.backup-<version>/`, so a bad update is one `cp` away from
-undone.
+`--update` replaces the top-level files the release contains, and nothing else.
+Directories are skipped, so `tests/` and your `certs/` are untouched, as is
+anything else you put in the directory. The version being replaced is kept in
+`.backup-<version>/`, so a bad update is one `cp` away from undone.
+
+That list is read out of the downloaded release rather than hardcoded here, and
+the distinction matters more than it looks. The code doing an update is the code
+being replaced, so a hardcoded list is always the *old* version's list: 1.0.0
+shipped before `INSTRUCTIONS.txt` existed, so with a fixed list it could never
+have installed it, and every file added in any later release would have hit the
+same wall.
 
 The check lives in `unimic.py` rather than in the launchers because Python is
 the only runtime all three platforms are guaranteed to have. A `.bat` could

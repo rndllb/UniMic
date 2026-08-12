@@ -1826,15 +1826,27 @@ def check_setup(device=None):
 #  turns one compromised account into every user's problem, and a mic that
 #  swaps its own source out mid-call is its own kind of bad.
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 REPO = "rndllb/UniMic"
 LATEST_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 
-# What a release owns. Everything else in the directory belongs to whoever put
-# it there (the certificates and their private key, an edited launcher, a
-# systemd unit) and an update must not touch any of it.
-PAYLOAD = ("unimic.py", "unimic.bat", "unimic.command",
-           "index.html", "README.md", "INSTRUCTIONS.txt", "LICENSE")
+def _payload_files(src):
+    """Every file a release installs, read out of the release itself.
+
+    This deliberately is not a list kept in this file. A hardcoded list is
+    always the *old* version's list, because the code doing the updating is
+    the code being replaced: 1.0.0 shipped without INSTRUCTIONS.txt, so a
+    hardcoded payload meant 1.0.0 could never install it, and every file added
+    in any future release would have hit the same wall.
+
+    Top-level regular files only. Directories are skipped, which leaves tests/
+    where it belongs, and so are dotfiles, which keeps .gitattributes and
+    friends out of an install. Everything else in the directory belongs to
+    whoever put it there, the certificates and their private key above all,
+    and is never touched.
+    """
+    return [n for n in sorted(os.listdir(src))
+            if not n.startswith(".") and os.path.isfile(os.path.join(src, n))]
 
 UPDATE_CACHE = os.path.join(HERE, ".update-check")
 UPDATE_EVERY = 24 * 60 * 60
@@ -2022,10 +2034,8 @@ def do_update():
         os.makedirs(backup, exist_ok=True)
 
         done = []
-        for name in PAYLOAD:
+        for name in _payload_files(src):
             new = os.path.join(src, name)
-            if not os.path.exists(new):
-                continue                    # release dropped this file
             cur = os.path.join(HERE, name)
             mode = os.stat(cur).st_mode & 0o777 if os.path.exists(cur) else None
             if mode is not None:
