@@ -260,7 +260,7 @@ Startup looks for a newer release at most once a day. If it finds one and
 you're at a terminal, it asks:
 
 ```
-  UniMic v1.1.0 is available. This is 1.0.2.
+  UniMic v1.1.0 is available. This is 1.0.1.
   Install it now? [Y/n]
 ```
 

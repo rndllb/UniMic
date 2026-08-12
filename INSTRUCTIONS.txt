@@ -272,7 +272,7 @@
  You do not need to do anything. When a new version comes out, UniMic asks
  you the next time you start it:
 
-     UniMic v1.1.0 is available. This is 1.0.2.
+     UniMic v1.1.0 is available. This is 1.0.1.
      Install it now? [Y/n]
 
  Press Enter to say yes. It installs the new version and restarts itself.
