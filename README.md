@@ -28,6 +28,20 @@ need a driver for any capture device, so there UniMic plays into a free virtual
 audio cable you install once and forget about. Everything above that layer (the
 page, the jitter buffer, the mic lock, TLS) is the same code on all three.
 
+## What it looks like
+
+Start it on the PC. It sets the virtual mic up, prints the URL to open, and
+names the device to select in your apps:
+
+![UniMic running in a macOS terminal, showing the detected BlackHole cable and the URL to open on the phone](docs/server.png)
+
+Open that URL on the phone and tap **Start microphone**:
+
+<img src="docs/phone.png" alt="UniMic in mobile Safari, showing the level meter, mic volume slider, live stats and capture options" width="300">
+
+The capture toggles apply the next time you start. Mic volume takes effect
+immediately.
+
 ## Why not Wo Mic
 
 Wo Mic needs a phone app talking a proprietary protocol to an unmaintained Linux
